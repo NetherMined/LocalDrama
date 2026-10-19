@@ -165,12 +165,16 @@ export interface HomeRow {
   key: string
   title: string
   items: Show[]
+  source?: string
+  note?: string
 }
 
 export interface HomeData {
   hero: Show | null
   rows: HomeRow[]
   errors: { key: string; error: string }[]
+  sources?: { id: string; name: string; type: string; enabled: boolean }[]
+  activeSourceId?: string
 }
 
 export interface Episode {
@@ -276,7 +280,6 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
   }
   if (!res.ok) {
     const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : null
-    // A wrong profile PIN is a 401 too, but it must not send the user to the admin login.
     if (res.status === 401 && code !== 'invalid_pin') handleUnauthorized()
     if (res.status === 403 && code === 'profile_required') {
       handleProfileRequired()
@@ -356,11 +359,6 @@ export const api = {
 
   saveProgress: (downloadId: number | string, position: number, duration: number) =>
     request<ProgressInfo>(progressPath(downloadId), { method: 'PUT', body: { position, duration } }),
-  /**
-   * Fire-and-forget save for pagehide/unload, where fetch may be cancelled.
-   * Sends POST with ?method=PUT because sendBeacon only supports POST.
-   * The server needs a matching POST alias for this path.
-   */
   saveProgressBeacon: (downloadId: number | string, position: number, duration: number): boolean => {
     if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return false
     const blob = new Blob([JSON.stringify({ position, duration })], { type: 'application/json' })
