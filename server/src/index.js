@@ -26,6 +26,7 @@ import { registerProfileRoutes } from './routes/profiles.js';
 import { registerProgressRoutes } from './routes/progress.js';
 import { registerIntegrationRoutes } from './routes/integrations.js';
 import { registerHealthRoutes } from './routes/health.js';
+import { registerSourceRoutes } from './routes/sources.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = path.resolve(HERE, '..', '..', 'web', 'dist');
@@ -116,6 +117,7 @@ registerAuthRoutes(app, ctx);
 registerProfileRoutes(app, ctx);
 registerProgressRoutes(app, ctx);
 registerIntegrationRoutes(app, ctx);
+registerSourceRoutes(app, ctx);
 registerBrowseRoutes(app, ctx);
 registerHomeRoutes(app, ctx);
 registerDownloadRoutes(app, ctx);
