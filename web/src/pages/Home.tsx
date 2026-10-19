@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type ContinueItem, type HomeData, type Show } from '../api'
 import { ShowCard } from '../components/ShowCard'
@@ -7,23 +7,14 @@ import { RefreshIcon } from '../components/icons'
 import { LoadError, Poster, buttonClass } from '../components/ui'
 import { errorMessage, fmtEpisode, fmtMinutesLeft } from '../lib/format'
 
-const ROW_TITLES: Record<string, string> = {
-  trending: 'Trending Now',
-  latest: 'Latest',
-  foryou: 'For You',
-  recommended: 'Recommended',
-  comingsoon: 'Coming Soon',
-  dubindo: 'Indonesian Dubbed',
-  vip: 'VIP',
-}
-
-const SKELETON_ROWS = ['Trending Now', 'Latest', 'For You']
+const SKELETON_ROWS = ['Continue Watching', 'Latest', 'Interests']
 
 export function Home() {
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
+  const [sortBy, setSortBy] = useState<'default' | 'name' | 'source'>('default')
 
   const load = useCallback(async (refresh: boolean) => {
     setRefreshing(true)
@@ -56,6 +47,18 @@ export function Home() {
     }
   }, [])
 
+  const sortedRows = useMemo(() => {
+    if (!data?.rows) return []
+    const rows = [...data.rows]
+    if (sortBy === 'name') {
+      return rows.sort((a, b) => a.title.localeCompare(b.title))
+    }
+    if (sortBy === 'source') {
+      return rows.sort((a, b) => (a.source || '').localeCompare(b.source || ''))
+    }
+    return rows
+  }, [data, sortBy])
+
   if (!data && error) return <LoadError title="Could not load the home page" message={error} onRetry={() => void load(false)} />
 
   if (!data) {
@@ -71,48 +74,65 @@ export function Home() {
 
   return (
     <div className="space-y-10">
-      <div className="flex items-center justify-end gap-3">
-        {error && <p role="alert" className="mr-auto text-sm text-red-300">{error}</p>}
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={refreshing}
-          aria-label="Refresh"
-          title="Refresh"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-panel-2 text-white transition hover:bg-line disabled:opacity-40"
-        >
-          <RefreshIcon className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <label htmlFor="sort" className="text-sm text-muted">Sort rows</label>
+          <select
+            id="sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-md border border-line bg-ink px-3 py-1.5 text-sm"
+          >
+            <option value="default">Default</option>
+            <option value="name">Name</option>
+            <option value="source">Source</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-3">
+          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={refreshing}
+            aria-label="Refresh"
+            title="Refresh"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-panel-2 text-white transition hover:bg-line disabled:opacity-40"
+          >
+            <RefreshIcon className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {data.hero && <Hero show={data.hero} />}
 
       {continueItems.length > 0 && (
         <ShowRow
-          title="Continue Watching"
+          title="Currently Watching"
           items={continueItems}
           itemKey={(item) => `${item.show.bookId}-${String(item.episode.id)}`}
           render={(item) => <ContinueCard item={item} />}
         />
       )}
 
-      {data.rows
-        .filter((row) => row.items.length > 0)
+      {sortedRows
+        .filter((row) => (row.items?.length ?? 0) > 0 || row.note)
         .map((row) => (
-          <ShowRow
-            key={row.key}
-            title={row.title}
-            items={row.items}
-            itemKey={(show) => show.bookId}
-            render={(show) => <ShowCard show={show} />}
-          />
+          <div key={row.key}>
+            <ShowRow
+              title={row.title}
+              items={row.items || []}
+              itemKey={(show) => show.bookId}
+              render={(show) => <ShowCard show={show} />}
+            />
+            {row.note && <p className="mt-1 text-xs text-muted">{row.note}</p>}
+          </div>
         ))}
 
-      {data.errors.length > 0 && (
+      {data.errors?.length > 0 && (
         <ul className="space-y-1">
           {data.errors.map((e) => (
             <li key={e.key} className="text-xs text-muted">
-              {ROW_TITLES[e.key] ?? e.key} is unavailable: {e.error}
+              {e.key} unavailable: {e.error}
             </li>
           ))}
         </ul>
