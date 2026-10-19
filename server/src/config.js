@@ -18,8 +18,8 @@ export function defaultSources() {
     {
       id: 'dramabox',
       type: 'dramabox',
-      name: 'Dramabox (official)',
-      enabled: true,
+      name: 'Dramabox (official — proxy removed)',
+      enabled: false,
       config: { proxyUrl: '' },
       lastHealth: null,
     },
@@ -35,7 +35,7 @@ export function defaultSources() {
       id: 'dramabuzz',
       type: 'dramabuzz',
       name: 'DramaBuzz / GoodBos',
-      enabled: false,
+      enabled: true,
       config: { apiKey: '' },
       lastHealth: null,
     },
@@ -52,7 +52,7 @@ export const DEFAULT_CONFIG = {
   passwordHash: '',
   configured: false,
   mdns: true,
-  activeSourceId: 'dramabox',
+  activeSourceId: 'dramabuzz',
   sources: defaultSources(),
   integrations: defaultIntegrations(),
 };
@@ -83,7 +83,6 @@ let current = null;
 
 function applyEnv(cfg) {
   const out = { ...cfg };
-  if (process.env.DRAMABOX_PROXY) out.proxyUrl = process.env.DRAMABOX_PROXY.trim();
   if (process.env.REQUEST_DELAY) out.requestDelay = Number(process.env.REQUEST_DELAY);
   if (process.env.DRAMABOX_LANG) out.language = process.env.DRAMABOX_LANG.trim();
   return out;
