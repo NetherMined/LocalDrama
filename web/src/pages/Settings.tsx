@@ -4,6 +4,7 @@ import { api, type Config, type Language, type PathValidation, type SettingsPatc
 import { LanUrlRow } from '../components/LanUrlRow'
 import { MediaServers } from '../components/MediaServers'
 import { ProxyField } from '../components/ProxyField'
+import { SourcesPanel } from '../components/SourcesPanel'
 import { SystemHealth } from '../components/SystemHealth'
 import { ErrorPanel, NoticeText, PageHeader, Section, Spinner, buttonClass, inputClass, type Notice } from '../components/ui'
 import { errorMessage } from '../lib/format'
@@ -219,6 +220,10 @@ function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" />
+
+      <Section id="sources" title="Sources" description="Choose which API to use for browsing and downloads. Green = working, red = offline or misconfigured.">
+        <SourcesPanel />
+      </Section>
 
       <form onSubmit={(e) => void save(e)} className="space-y-6">
         <Section id="storage" title="Storage" description="Where downloaded episodes are saved.">
@@ -493,4 +498,3 @@ function SettingsPage() {
     </div>
   )
 }
-
