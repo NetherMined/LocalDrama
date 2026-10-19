@@ -15,7 +15,6 @@ export function Show() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [libraryIds, setLibraryIds] = useState<Map<number, number | string>>(() => new Map())
-  const [selected, setSelected] = useState<Set<number>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -31,7 +30,6 @@ export function Show() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    setSelected(new Set())
     setNotice(null)
     api
       .show(bookId)
@@ -71,32 +69,16 @@ export function Show() {
     const s = displayOf(ep).state
     return s === 'none' || s === 'failed'
   })
-  const allSelected = selectable.length > 0 && selectable.every((ep) => selected.has(ep.index))
-  const someSelected = selected.size > 0 && !allSelected
 
-  function toggle(index: number) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(index)) next.delete(index)
-      else next.add(index)
-      return next
-    })
-  }
-
-  function toggleAll() {
-    setSelected(allSelected ? new Set() : new Set(selectable.map((ep) => ep.index)))
-  }
-
-  async function enqueue(episodes?: number[]) {
+  async function downloadAll() {
     setBusy(true)
     setNotice(null)
     try {
-      const res = await api.enqueue(bookId, episodes)
+      const res = await api.enqueue(bookId)
       setNotice({
         kind: 'ok',
         text: res.added === 1 ? 'Added 1 episode to downloads.' : `Added ${res.added} episodes to downloads.`,
       })
-      setSelected(new Set())
     } catch (err) {
       setNotice({ kind: 'err', text: errorMessage(err) })
     } finally {
@@ -172,19 +154,11 @@ export function Show() {
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => void enqueue()}
+              onClick={() => void downloadAll()}
               disabled={busy || selectable.length === 0}
               className={buttonClass()}
             >
-              Download all
-            </button>
-            <button
-              type="button"
-              onClick={() => void enqueue([...selected].sort((a, b) => a - b))}
-              disabled={busy || selected.size === 0}
-              className={buttonClass('ghost')}
-            >
-              Download selected ({selected.size})
+              {busy ? 'Queuing...' : 'Download all'}
             </button>
           </div>
           {notice && (
@@ -196,25 +170,9 @@ export function Show() {
       </section>
 
       <section aria-labelledby="episodes-heading">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 id="episodes-heading" className="text-lg font-semibold">
-            Episodes
-          </h2>
-          {selectable.length > 0 && (
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected
-                }}
-                onChange={toggleAll}
-                className="h-4 w-4 accent-rose-500"
-              />
-              Select all
-            </label>
-          )}
-        </div>
+        <h2 id="episodes-heading" className="mb-3 text-lg font-semibold">
+          Episodes
+        </h2>
 
         {episodes.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">
@@ -224,17 +182,8 @@ export function Show() {
           <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel">
             {episodes.map((ep) => {
               const d = displayOf(ep)
-              const canSelect = d.state === 'none' || d.state === 'failed'
               return (
                 <li key={ep.index} className="flex items-center gap-3 px-3 py-3 sm:px-4">
-                  <input
-                    type="checkbox"
-                    disabled={!canSelect}
-                    checked={selected.has(ep.index)}
-                    onChange={() => toggle(ep.index)}
-                    aria-label={`Select episode ${ep.index + 1}`}
-                    className="h-4 w-4 shrink-0 accent-rose-500 disabled:opacity-30"
-                  />
                   <span className="w-10 shrink-0 font-mono text-xs text-muted">{fmtEpisode(ep.index)}</span>
                   <span className="min-w-0 flex-1 truncate text-sm">{ep.name || `Episode ${ep.index + 1}`}</span>
                   {d.state !== 'none' && (
