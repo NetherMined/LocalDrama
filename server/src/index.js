@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DATA_DIR, getConfig, loadConfig } from './config.js';
 import { openDb } from './db.js';
 import { createAuth } from './auth.js';
-import { createProvider } from './provider.js';
+import { createMultiProvider } from './multiProvider.js';
 import { createDownloadManager } from './downloads.js';
 import { createLibrary } from './library.js';
 import { createEvents } from './events.js';
@@ -44,12 +44,11 @@ const events = createEvents();
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
-const provider = createProvider({
+const provider = createMultiProvider({
   mock: MOCK,
   port: PORT,
   language: config.language,
   requestDelay: config.requestDelay,
-  proxyUrl: '', // Proxy removed — use alternative sources
 });
 const profiles = createProfiles(db);
 const progress = createProgress({ db });
