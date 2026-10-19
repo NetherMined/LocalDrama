@@ -146,9 +146,9 @@ export function SourcesPanel() {
             )}
             {editing === s.id && (
               <div className="mt-3 space-y-2">
-                {s.type === 'dramabos' && (
+                {(s.type === 'dramabos' || s.type === 'dramabuzz') && (
                   <input
-                    placeholder="DramaBos API key"
+                    placeholder={s.type === 'dramabuzz' ? 'DramaBuzz / GoodBos API key' : 'DramaBos API key'}
                     value={editConfig.apiKey || ''}
                     onChange={(e) => setEditConfig({ ...editConfig, apiKey: e.target.value })}
                     className="w-full rounded border border-line bg-ink px-3 py-2 text-sm"
