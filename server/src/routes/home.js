@@ -1,7 +1,6 @@
-import { httpError } from '../errors.js';
 import { getConfig } from '../config.js';
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function registerHomeRoutes(app, ctx) {
   const { db, provider } = ctx;
@@ -9,19 +8,52 @@ export function registerHomeRoutes(app, ctx) {
 
   async function build() {
     const cfg = getConfig();
-    const sources = cfg.sources || [];
     const rows = [];
     const errors = [];
 
-    // Continue watching is handled separately on the client via /api/progress/continue
-    // Interests: simple tag-based or recommended from current provider for now
+    // Latest from active source
+    try {
+      const latestRes = await provider.latest(1);
+      const latest = latestRes?.items || [];
+      if (latest.length) {
+        rows.push({
+          key: 'latest',
+          title: 'Latest',
+          source: cfg.activeSourceId,
+          items: latest.slice(0, 24),
+        });
+      }
+    } catch (err) {
+      errors.push({ key: 'latest', error: String(err?.message || err) });
+    }
+
+    // Trending (reuse latest if dedicated method is empty)
+    try {
+      let trending = await provider.trending();
+      if (!Array.isArray(trending) || trending.length === 0) {
+        const latestRes = await provider.latest(1);
+        trending = latestRes?.items || [];
+      }
+      if (trending.length) {
+        rows.push({
+          key: 'trending',
+          title: 'Trending Now',
+          source: cfg.activeSourceId,
+          items: trending.slice(0, 24),
+        });
+      }
+    } catch (err) {
+      errors.push({ key: 'trending', error: String(err?.message || err) });
+    }
+
+    // Recommended / Interests
     try {
       const recommended = await provider.recommended();
       if (recommended?.length) {
         rows.push({
           key: 'interests',
           title: 'Based on your interests',
-          source: 'dramabox',
+          source: cfg.activeSourceId,
           items: recommended.slice(0, 20),
         });
       }
@@ -29,60 +61,15 @@ export function registerHomeRoutes(app, ctx) {
       errors.push({ key: 'interests', error: String(err?.message || err) });
     }
 
-    // Latest from each enabled source (currently only dramabox is fully implemented)
-    for (const source of sources.filter((s) => s.enabled)) {
-      try {
-        if (source.type === 'dramabox') {
-          const latest = (await provider.latest(1)).items || [];
-          if (latest.length) {
-            rows.push({
-              key: `latest-${source.id}`,
-              title: `Latest · ${source.name}`,
-              source: source.id,
-              items: latest.slice(0, 20),
-            });
-          }
-        } else {
-          // Placeholder for other sources — full provider switch comes next
-          rows.push({
-            key: `latest-${source.id}`,
-            title: `Latest · ${source.name}`,
-            source: source.id,
-            items: [],
-            note: 'Full browsing for this source is coming soon',
-          });
-        }
-      } catch (err) {
-        errors.push({ key: source.id, error: String(err?.message || err) });
-      }
-    }
-
-    // Classic shelves from the active provider
-    const classic = [
-      { key: 'trending', title: 'Trending Now', load: () => provider.trending() },
-      { key: 'foryou', title: 'For You', load: () => provider.forYou() },
-      { key: 'vip', title: 'VIP', load: () => provider.vip() },
-    ];
-    for (const shelf of classic) {
-      try {
-        const items = (await shelf.load()).filter((s) => s.bookId);
-        if (items.length) rows.push({ key: shelf.key, title: shelf.title, source: cfg.activeSourceId, items });
-      } catch (err) {
-        errors.push({ key: shelf.key, error: String(err?.message || err) });
-      }
-    }
-
     const all = rows.flatMap((r) => r.items || []);
     if (all.length) db.upsertShows(all);
 
-    const heroSource = rows.find((r) => r.items?.length && r.items[0].introduction);
-    const hero = heroSource?.items.find((s) => s.introduction) ?? null;
+    const hero = rows[0]?.items?.find((s) => s.introduction || s.name) || rows[0]?.items?.[0] || null;
 
     return {
       hero,
       rows,
       errors,
-      sources: sources.map((s) => ({ id: s.id, name: s.name, type: s.type, enabled: s.enabled })),
       activeSourceId: cfg.activeSourceId,
     };
   }
