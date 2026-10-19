@@ -3,7 +3,6 @@ import { Link, Navigate } from 'react-router-dom'
 import { api, type Config, type Language, type PathValidation, type SettingsPatch } from '../api'
 import { LanUrlRow } from '../components/LanUrlRow'
 import { MediaServers } from '../components/MediaServers'
-import { ProxyField } from '../components/ProxyField'
 import { SourcesPanel } from '../components/SourcesPanel'
 import { SystemHealth } from '../components/SystemHealth'
 import { ErrorPanel, NoticeText, PageHeader, Section, Spinner, buttonClass, inputClass, type Notice } from '../components/ui'
@@ -22,7 +21,6 @@ export function Settings() {
 interface Form {
   downloadRoot: string
   language: string
-  proxyUrl: string
   requestDelay: number
   concurrency: number
   quality: number
@@ -32,7 +30,6 @@ function toForm(cfg: Config): Form {
   return {
     downloadRoot: cfg.downloadRoot,
     language: cfg.language,
-    proxyUrl: cfg.proxyUrl,
     requestDelay: cfg.requestDelay,
     concurrency: cfg.concurrency,
     quality: cfg.quality,
@@ -136,8 +133,6 @@ function SettingsPage() {
         patch.downloadRoot = check.resolved
       }
       if (values.language !== current.language) patch.language = values.language
-      const proxy = values.proxyUrl.trim()
-      if (proxy !== current.proxyUrl.trim()) patch.proxyUrl = proxy
       if (values.requestDelay !== current.requestDelay) {
         patch.requestDelay = Math.max(0, Math.round(values.requestDelay) || 0)
       }
@@ -290,21 +285,6 @@ function SettingsPage() {
           </select>
         </Section>
 
-        <Section
-          id="connection"
-          title="Connection"
-          description="Dramabox often blocks restricted-region addresses. A proxy outside that region keeps the API reachable."
-        >
-          <label htmlFor="proxy" className="block text-sm font-medium">
-            Proxy URL <span className="font-normal text-muted">(optional)</span>
-          </label>
-          <ProxyField
-            id="proxy"
-            value={values.proxyUrl}
-            onChange={(v) => update('proxyUrl', v)}
-          />
-        </Section>
-
         <Section id="downloads" title="Downloads" description="Pacing and quality for new downloads.">
           <div className="grid gap-5 sm:grid-cols-3">
             <div>
@@ -449,7 +429,7 @@ function SettingsPage() {
         )}
       </Section>
 
-      <Section id="network" title="Network" description="Addresses other devices on this Wi-Fi can use to reach Dramabox.">
+      <Section id="network" title="Network" description="Addresses other devices on this Wi-Fi can use to reach the server.">
         {lanUrls.length > 0 ? (
           <ul className="space-y-2">
             {lanUrls.map((url) => (
@@ -472,7 +452,7 @@ function SettingsPage() {
             />
             Advertise on network (mDNS)
           </label>
-          <p className="text-xs text-muted">Lets devices on this network find the server as "Dramabox Server" without typing an address.</p>
+          <p className="text-xs text-muted">Lets devices on this network find the server as "LocalDrama Server" without typing an address.</p>
           {mdnsNotice && <NoticeText notice={mdnsNotice} />}
         </div>
       </Section>
