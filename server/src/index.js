@@ -15,7 +15,6 @@ import { createProgress } from './progress.js';
 import { createIntegrations } from './integrations.js';
 import { createMdns } from './mdns.js';
 import { sendRanged } from './stream.js';
-import { installHttpsPatch, setProxy } from './proxy.js';
 import { lanUrls, registerSystemRoutes, VERSION } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerBrowseRoutes } from './routes/browse.js';
@@ -42,13 +41,6 @@ const config = loadConfig();
 const db = openDb(DATA_DIR);
 const auth = createAuth(db.raw);
 const events = createEvents();
-installHttpsPatch();
-try {
-  await setProxy(config.proxyUrl);
-} catch (err) {
-  console.error(`Ignoring proxy setting: ${err.message}`);
-  await setProxy('');
-}
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
@@ -57,7 +49,7 @@ const provider = createProvider({
   port: PORT,
   language: config.language,
   requestDelay: config.requestDelay,
-  proxyUrl: config.proxyUrl,
+  proxyUrl: '', // Proxy removed — use alternative sources
 });
 const profiles = createProfiles(db);
 const progress = createProgress({ db });
@@ -160,7 +152,7 @@ if (getConfig().configured) {
 }
 
 await app.listen({ host: HOST, port: PORT });
-app.log.info(`Dramabox Server listening on ${HOST}:${PORT}${MOCK ? ' (mock mode)' : ''}`);
+app.log.info(`LocalDrama Server listening on ${HOST}:${PORT}${MOCK ? ' (mock mode)' : ''}`);
 app.log.info(`Data directory: ${DATA_DIR}`);
 for (const url of lanUrls(PORT)) app.log.info(`LAN: ${url}`);
 if (!hasWebDist) app.log.warn('web/dist not found; UI is not being served');
