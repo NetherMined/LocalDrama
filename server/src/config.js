@@ -31,6 +31,14 @@ export function defaultSources() {
       config: { apiKey: '' },
       lastHealth: null,
     },
+    {
+      id: 'dramabuzz',
+      type: 'dramabuzz',
+      name: 'DramaBuzz / GoodBos',
+      enabled: false,
+      config: { apiKey: '' },
+      lastHealth: null,
+    },
   ];
 }
 
