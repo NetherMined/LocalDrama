@@ -7,14 +7,14 @@ import { RefreshIcon } from '../components/icons'
 import { LoadError, Poster, buttonClass } from '../components/ui'
 import { errorMessage, fmtEpisode, fmtMinutesLeft } from '../lib/format'
 
-const SKELETON_ROWS = ['Continue Watching', 'Latest', 'Interests']
+const SKELETON_ROWS = ['Currently Watching', 'Latest', 'Trending Now']
 
 export function Home() {
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
-  const [sortBy, setSortBy] = useState<'default' | 'name' | 'source'>('default')
+  const [sortBy, setSortBy] = useState<'default' | 'name'>('default')
 
   const load = useCallback(async (refresh: boolean) => {
     setRefreshing(true)
@@ -53,9 +53,6 @@ export function Home() {
     if (sortBy === 'name') {
       return rows.sort((a, b) => a.title.localeCompare(b.title))
     }
-    if (sortBy === 'source') {
-      return rows.sort((a, b) => (a.source || '').localeCompare(b.source || ''))
-    }
     return rows
   }, [data, sortBy])
 
@@ -63,8 +60,8 @@ export function Home() {
 
   if (!data) {
     return (
-      <div className="space-y-10" aria-busy="true" aria-label="Loading home">
-        <div className="h-72 animate-pulse rounded-xl bg-panel-2 sm:h-80" />
+      <div className="space-y-12" aria-busy="true" aria-label="Loading home">
+        <div className="h-80 animate-pulse rounded-xl bg-panel-2" />
         {SKELETON_ROWS.map((title) => (
           <ShowRowSkeleton key={title} title={title} />
         ))}
@@ -72,11 +69,13 @@ export function Home() {
     )
   }
 
+  const hasAnyRows = sortedRows.some((r) => (r.items?.length ?? 0) > 0)
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-12 pb-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <label htmlFor="sort" className="text-sm text-muted">Sort rows</label>
+          <label htmlFor="sort" className="text-sm text-muted">Sort</label>
           <select
             id="sort"
             value={sortBy}
@@ -85,7 +84,6 @@ export function Home() {
           >
             <option value="default">Default</option>
             <option value="name">Name</option>
-            <option value="source">Source</option>
           </select>
         </div>
         <div className="flex items-center gap-3">
@@ -114,25 +112,35 @@ export function Home() {
         />
       )}
 
-      {sortedRows
-        .filter((row) => (row.items?.length ?? 0) > 0 || row.note)
-        .map((row) => (
-          <div key={row.key}>
+      {hasAnyRows ? (
+        sortedRows
+          .filter((row) => (row.items?.length ?? 0) > 0)
+          .map((row) => (
             <ShowRow
+              key={row.key}
               title={row.title}
               items={row.items || []}
               itemKey={(show) => show.bookId}
               render={(show) => <ShowCard show={show} />}
             />
-            {row.note && <p className="mt-1 text-xs text-muted">{row.note}</p>}
-          </div>
-        ))}
+          ))
+      ) : (
+        <div className="rounded-xl border border-line bg-panel px-6 py-12 text-center">
+          <p className="text-lg font-medium">No shows available yet</p>
+          <p className="mt-2 text-sm text-muted">
+            Configure a source (DramaBuzz / GoodBos) with a valid API key in Settings, then refresh.
+          </p>
+          <Link to="/settings" className={`${buttonClass('ghost')} mt-4 inline-flex`}>
+            Open Settings
+          </Link>
+        </div>
+      )}
 
       {data.errors?.length > 0 && (
         <ul className="space-y-1">
           {data.errors.map((e) => (
             <li key={e.key} className="text-xs text-muted">
-              {e.key} unavailable: {e.error}
+              {e.key}: {e.error}
             </li>
           ))}
         </ul>
