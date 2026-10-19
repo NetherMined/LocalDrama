@@ -1,5 +1,3 @@
-import { httpError } from './errors.js';
-
 const SOURCES = {
   dramabox: {
     id: 'dramabox',
@@ -11,6 +9,12 @@ const SOURCES = {
     id: 'dramabos',
     name: 'DramaBos',
     description: 'Third-party aggregator API. Needs an API key. Works without proxy.',
+    needs: ['apiKey'],
+  },
+  dramabuzz: {
+    id: 'dramabuzz',
+    name: 'DramaBuzz / GoodBos',
+    description: 'Aggregator covering many platforms (DramaBox, ReelShort, ShortMax, etc.). Uses shared key.',
     needs: ['apiKey'],
   },
 };
@@ -31,7 +35,6 @@ export async function testSource(type, config = {}) {
   const at = new Date().toISOString();
   try {
     if (type === 'dramabox') {
-      // Dramabox health is handled by the existing provider; this is a lightweight check.
       return { ok: true, at, note: 'Use the proxy test for full Dramabox verification' };
     }
     if (type === 'dramabos') {
@@ -51,6 +54,16 @@ export async function testSource(type, config = {}) {
       const data = await res.json();
       if (!data.status) return { ok: false, error: data.message || 'API returned status false', at };
       return { ok: true, at };
+    }
+    if (type === 'dramabuzz') {
+      if (!config.apiKey) return { ok: false, error: 'API key required', at };
+      const res = await fetch(`https://api.dramabuzz.sbs/api/status?key=${config.apiKey}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}`, at };
+      const data = await res.json();
+      if (!data.success) return { ok: false, error: 'Status check failed', at };
+      return { ok: true, at, platforms: data.summary };
     }
     return { ok: false, error: 'Unknown source type', at };
   } catch (err) {
