@@ -1,0 +1,18 @@
+services:
+  dramabox:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8096}:8096"
+    volumes:
+      - ./data:/data
+      - ${MEDIA_DIR:-./media}:/media
+    environment:
+      - DRAMABOX_PROXY=${DRAMABOX_PROXY:-}
+      - REQUEST_DELAY=${REQUEST_DELAY:-}
+      - DRAMABOX_LANG=${DRAMABOX_LANG:-}
+      - TZ=${TZ:-UTC}
+    # mDNS ("Dramabox Server" on the LAN) needs multicast, which Docker bridge networking does not
+    # forward. On a Linux host you can enable it with `network_mode: host` instead of `ports`
+    # (remove the ports mapping, since host networking uses 8096 directly). Not supported on Docker Desktop.
+    # network_mode: host

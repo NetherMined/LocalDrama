@@ -1,0 +1,21 @@
+{
+  "name": "dramabox-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "cd server && npm install && cd ../web && npm install",
+    "dev": "concurrently -n server,web -c blue,magenta \"cd server && npm run dev\" \"cd web && npm run dev\"",
+    "dev:mock": "cross-env DRAMABOX_MOCK=1 npm run dev",
+    "build": "cd web && npm run build",
+    "start": "cd server && npm start",
+    "start:mock": "cross-env DRAMABOX_MOCK=1 npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

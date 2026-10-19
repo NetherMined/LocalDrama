@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "creator": "zhadevv",
+  "data": {
+    "status": "success",
+    "apiBy": "dramabox",
+    "data": {
+      "bookId": "41000107296",
+      "allEps": 76,
+      "chapter": {
+        "id": "581861139",
+        "index": 1,
+        "video": {
+          "mp4": "https://hwztakavideo.dramaboxdb.com/2b5216a54c710d94e978758ae700b80d/6a87db50/93/6x9/69x2/692x7/69270100014/581861139_4/581861139.720p.narrowv3.mp4",
+          "m3u8": null
+        }
+      }
+    }
+  },
+  "metadata": {},
+  "message": null
+}
