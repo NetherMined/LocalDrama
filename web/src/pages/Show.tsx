@@ -18,6 +18,7 @@ export function Show() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [watching, setWatching] = useState<{ index: number; url: string } | null>(null)
 
   const loadLibrary = useCallback(() => {
     api
@@ -86,6 +87,22 @@ export function Show() {
     }
   }
 
+  async function watchEpisode(index: number) {
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/shows/${encodeURIComponent(bookId)}/stream/${index}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `Failed to get stream (${res.status})`)
+      }
+      const { url } = await res.json()
+      if (!url) throw new Error('No stream URL returned')
+      setWatching({ index, url })
+    } catch (err) {
+      setNotice({ kind: 'err', text: errorMessage(err) })
+    }
+  }
+
   if (loading) {
     return (
       <div className="animate-pulse" aria-busy="true" aria-label="Loading drama">
@@ -116,6 +133,25 @@ export function Show() {
   return (
     <div className="space-y-8">
       <BackLink />
+
+      {watching && (
+        <div className="overflow-hidden rounded-lg bg-black shadow-2xl">
+          <video
+            key={watching.url}
+            src={watching.url}
+            controls
+            autoPlay
+            playsInline
+            className="aspect-video w-full"
+          />
+          <div className="flex items-center justify-between bg-ink px-4 py-2 text-sm">
+            <span>Episode {watching.index}</span>
+            <button type="button" onClick={() => setWatching(null)} className={buttonClass('ghost')}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="flex flex-col gap-6 sm:flex-row sm:gap-8">
         <div className="w-40 shrink-0 sm:w-56">
@@ -189,12 +225,19 @@ export function Show() {
                   {d.state !== 'none' && (
                     <StatusPill status={d.state} bytesDone={d.bytesDone} bytesTotal={d.bytesTotal} />
                   )}
+                  <button
+                    type="button"
+                    onClick={() => void watchEpisode(ep.index)}
+                    className={buttonClass('ghost')}
+                  >
+                    Watch
+                  </button>
                   {d.state === 'downloaded' && d.id !== undefined && (
                     <Link
                       to={`/watch/${encodeURIComponent(bookId)}/${encodeURIComponent(String(d.id))}`}
                       className={buttonClass('ghost')}
                     >
-                      Play
+                      Play local
                     </Link>
                   )}
                 </li>
