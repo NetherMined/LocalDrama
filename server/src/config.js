@@ -13,6 +13,27 @@ export function defaultIntegrations() {
   };
 }
 
+export function defaultSources() {
+  return [
+    {
+      id: 'dramabox',
+      type: 'dramabox',
+      name: 'Dramabox (official)',
+      enabled: true,
+      config: { proxyUrl: '' },
+      lastHealth: null,
+    },
+    {
+      id: 'dramabos',
+      type: 'dramabos',
+      name: 'DramaBos',
+      enabled: false,
+      config: { apiKey: '' },
+      lastHealth: null,
+    },
+  ];
+}
+
 export const DEFAULT_CONFIG = {
   downloadRoot: '',
   language: 'en',
@@ -23,6 +44,8 @@ export const DEFAULT_CONFIG = {
   passwordHash: '',
   configured: false,
   mdns: true,
+  activeSourceId: 'dramabox',
+  sources: defaultSources(),
   integrations: defaultIntegrations(),
 };
 
@@ -30,6 +53,21 @@ function mergeIntegrations(stored) {
   const merged = defaultIntegrations();
   for (const key of Object.keys(merged)) Object.assign(merged[key], stored?.[key] ?? {});
   return merged;
+}
+
+function mergeSources(stored) {
+  const defaults = defaultSources();
+  if (!Array.isArray(stored)) return defaults;
+  const byId = new Map(stored.map((s) => [s.id, s]));
+  return defaults.map((def) => {
+    const existing = byId.get(def.id);
+    if (!existing) return def;
+    return {
+      ...def,
+      ...existing,
+      config: { ...def.config, ...(existing.config || {}) },
+    };
+  });
 }
 
 let fileConfig = null;
@@ -51,7 +89,12 @@ export function loadConfig() {
   } catch {
     stored = {};
   }
-  fileConfig = { ...DEFAULT_CONFIG, ...stored, integrations: mergeIntegrations(stored.integrations) };
+  fileConfig = {
+    ...DEFAULT_CONFIG,
+    ...stored,
+    integrations: mergeIntegrations(stored.integrations),
+    sources: mergeSources(stored.sources),
+  };
   current = applyEnv(fileConfig);
   return current;
 }
@@ -63,6 +106,7 @@ export function getConfig() {
 export function saveConfig(patch) {
   if (!fileConfig) loadConfig();
   fileConfig = { ...fileConfig, ...patch };
+  if (patch.sources) fileConfig.sources = mergeSources(patch.sources);
   const tmp = `${CONFIG_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(fileConfig, null, 2));
   fs.renameSync(tmp, CONFIG_FILE);
