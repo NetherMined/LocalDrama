@@ -179,6 +179,35 @@ export interface HomeData {
   activeSourceId?: string
 }
 
+export type BrowseSort = 'latest' | 'popular' | 'name' | 'episodes'
+
+export interface BrowseSource {
+  id: string
+  name: string
+  type: string
+}
+
+export interface BrowseSources {
+  activeSourceId: string
+  sources: BrowseSource[]
+}
+
+export interface BrowseCategory {
+  name: string
+  count: number
+}
+
+export interface BrowseCategories {
+  source: string
+  categories: BrowseCategory[]
+}
+
+export interface LatestParams {
+  source?: string
+  tag?: string
+  sort?: BrowseSort
+}
+
 export interface Episode {
   index: number
   chapterId: string
@@ -317,7 +346,16 @@ export const api = {
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
 
   home: (refresh = false) => request<HomeData>(refresh ? '/api/home?refresh=1' : '/api/home'),
-  latest: (page = 1) => request<Page<Show>>(`/api/browse/latest?page=${page}`),
+  browseSources: () => request<BrowseSources>('/api/browse/sources'),
+  categories: (source?: string) =>
+    request<BrowseCategories>(`/api/browse/categories${source ? `?source=${enc(source)}` : ''}`),
+  latest: (page = 1, { source, tag, sort }: LatestParams = {}) => {
+    const query = new URLSearchParams({ page: String(page) })
+    if (source) query.set('source', source)
+    if (tag) query.set('tag', tag)
+    if (sort) query.set('sort', sort)
+    return request<Page<Show>>(`/api/browse/latest?${query.toString()}`)
+  },
   search: (q: string, page = 1) => request<Page<Show>>(`/api/search?q=${enc(q)}&page=${page}`),
   suggest: (q: string) => request<{ items: Suggestion[] }>(`/api/search/suggest?q=${enc(q)}`),
   show: (bookId: string, source?: string) =>

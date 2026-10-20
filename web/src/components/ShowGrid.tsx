@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Page, Show } from '../api'
 import { errorMessage } from '../lib/format'
 import { ShowCard } from './ShowCard'
@@ -9,21 +9,25 @@ interface Props {
   load: (page: number) => Promise<Page<Show>>
   emptyTitle: string
   emptyHint?: ReactNode
+  emptyAction?: ReactNode
 }
 
-export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
+export function ShowGrid({ resetKey, load, emptyTitle, emptyHint, emptyAction }: Props) {
   const [items, setItems] = useState<Show[]>([])
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const latestRequest = useRef(0)
 
   const fetchPage = useCallback(
     async (target: number, replace: boolean) => {
+      const request = ++latestRequest.current
       setLoading(true)
       setError(null)
       try {
         const res = await load(target)
+        if (request !== latestRequest.current) return
         setItems((prev) => {
           if (replace) return dedupe(res.items)
           return dedupe([...prev, ...res.items])
@@ -31,9 +35,10 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
         setPage(target)
         setHasMore(res.hasMore)
       } catch (err) {
+        if (request !== latestRequest.current) return
         setError(errorMessage(err))
       } finally {
-        setLoading(false)
+        if (request === latestRequest.current) setLoading(false)
       }
     },
     [load],
@@ -53,7 +58,10 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
 
   if (!loading && items.length === 0) {
     return (
-      <EmptyState title={emptyTitle}>{emptyHint}</EmptyState>
+      <EmptyState title={emptyTitle}>
+        {emptyHint}
+        {emptyAction && <div className="mt-4 flex justify-center">{emptyAction}</div>}
+      </EmptyState>
     )
   }
 
@@ -85,7 +93,7 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
   )
 }
 
-function ShowGridSkeleton({ count = 10 }: { count?: number }) {
+export function ShowGridSkeleton({ count = 10 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-busy="true" aria-label="Loading">
       {Array.from({ length: count }, (_, i) => (
