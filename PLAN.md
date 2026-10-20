@@ -445,7 +445,7 @@ Each phase stops for confirmation before the next.
    Library, Downloads, Favourites, Account, Profiles, Settings, Users, User detail, Login) and fix overflow,
    tap-target sizes (≥ 44 px), sticky bars, and the nav (collapse the link row into a bottom tab bar on phones).
 
-## Phase 4: HTTPS with Tailscale
+## Phase 4: HTTPS with Tailscale (dropped 2026-10-20: user chose to stay on LAN http)
 1. **User:** install Tailscale on this PC and sign in; in the Tailscale admin console enable MagicDNS and
    HTTPS certificates; install Tailscale on phones/TVs that should use the app.
 2. Claude: `tailscale serve --bg http://localhost:8096` → `https://<pc>.<tailnet>.ts.net`; mark session/device

@@ -107,7 +107,7 @@ export function InstallDialog({ onClose }: { onClose: () => void }) {
               </Step>
             </Steps>
             <p className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200">
-              For a full app install, DramaUs needs HTTPS. Ask your admin.
+              The shortcut opens DramaUs in Chrome. It works on your home Wi-Fi.
             </p>
           </div>
         )}
