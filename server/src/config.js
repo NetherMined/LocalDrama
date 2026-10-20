@@ -91,6 +91,11 @@ function mergeSources(stored) {
     return {
       ...def,
       ...existing,
+      // The same id can move to a different provider type (for example the
+      // old official dramabox source became a GoodBos platform). Stored
+      // type/name must not keep the old implementation around.
+      type: def.type,
+      name: def.name,
       config: { ...def.config, ...(existing.config || {}) },
     };
   });

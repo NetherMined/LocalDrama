@@ -22,6 +22,19 @@ interface SourcesResponse {
   sources: Source[]
 }
 
+async function requestJson(url: string, init?: RequestInit) {
+  const res = await fetch(url, init)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const message =
+      body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+        ? body.error
+        : `Request failed (${res.status})`
+    throw new Error(message)
+  }
+  return body
+}
+
 export function SourcesPanel() {
   const [data, setData] = useState<SourcesResponse | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -31,8 +44,8 @@ export function SourcesPanel() {
 
   async function load() {
     try {
-      const res = await fetch('/api/sources').then((r) => r.json())
-      setData(res)
+      const res = await requestJson('/api/sources')
+      setData(res as SourcesResponse)
     } catch (err) {
       setNotice({ kind: 'err', text: String(err) })
     }
@@ -46,7 +59,7 @@ export function SourcesPanel() {
     setBusy(id)
     setNotice(null)
     try {
-      const health = await fetch(`/api/sources/${id}/test`, { method: 'POST' }).then((r) => r.json())
+      const health = (await requestJson(`/api/sources/${id}/test`, { method: 'POST' })) as SourceHealth
       setNotice({
         kind: health.ok ? 'ok' : 'err',
         text: health.ok ? `${id} is working` : health.error || 'Test failed',
@@ -62,7 +75,7 @@ export function SourcesPanel() {
   async function activate(id: string) {
     setBusy(id)
     try {
-      await fetch(`/api/sources/${id}/activate`, { method: 'POST' })
+      await requestJson(`/api/sources/${id}/activate`, { method: 'POST' })
       setNotice({ kind: 'ok', text: `Switched to ${id}` })
       await load()
     } catch (err) {
@@ -75,7 +88,7 @@ export function SourcesPanel() {
   async function toggleEnabled(id: string, enabled: boolean) {
     setBusy(id)
     try {
-      await fetch(`/api/sources/${id}`, {
+      await requestJson(`/api/sources/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
@@ -91,7 +104,7 @@ export function SourcesPanel() {
   async function saveConfig(id: string) {
     setBusy(id)
     try {
-      await fetch(`/api/sources/${id}`, {
+      await requestJson(`/api/sources/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: editConfig }),

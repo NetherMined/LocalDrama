@@ -36,7 +36,9 @@ export function ShowCard({ show, to, progress, caption }: ShowCardProps) {
       <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-white/90 group-hover:text-white">
         {show.name}
       </p>
-      <p className="mt-0.5 text-xs text-muted">{caption ?? `${show.episodeCount} episodes`}</p>
+      {(caption || show.episodeCount > 0) && (
+        <p className="mt-0.5 text-xs text-muted">{caption ?? `${show.episodeCount} episodes`}</p>
+      )}
     </Link>
   )
 }

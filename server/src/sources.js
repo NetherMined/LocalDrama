@@ -1,3 +1,5 @@
+import { testPlatform } from './goodbosPlatforms.js';
+
 const SOURCES = {
   dramabox: {
     id: 'dramabox',
@@ -15,6 +17,12 @@ const SOURCES = {
     id: 'dramabuzz',
     name: 'DramaBuzz / GoodBos',
     description: 'Aggregator covering many platforms (DramaBox, ReelShort, ShortMax, etc.). Uses shared key.',
+    needs: ['apiKey'],
+  },
+  goodbos: {
+    id: 'goodbos',
+    name: 'GoodBos platform',
+    description: 'Per-platform GoodBos API. Uses the shared DramaBuzz / GoodBos key.',
     needs: ['apiKey'],
   },
 };
@@ -64,6 +72,10 @@ export async function testSource(type, config = {}) {
       const data = await res.json();
       if (!data.success) return { ok: false, error: 'Status check failed', at };
       return { ok: true, at, platforms: data.summary };
+    }
+    if (type === 'goodbos') {
+      const result = await testPlatform(config);
+      return { ...result, at };
     }
     return { ok: false, error: 'Unknown source type', at };
   } catch (err) {

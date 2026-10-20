@@ -70,9 +70,18 @@ export function registerHomeRoutes(app, ctx) {
 
   app.get('/api/home', async (req) => {
     const refresh = req.query.refresh === '1';
-    if (!refresh && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
+    const cfg = getConfig();
+    // Switching sources or toggling platforms must not serve the old home
+    // payload for five minutes.
+    const signature = [
+      cfg.activeSourceId,
+      ...(cfg.sources || []).filter((s) => s.enabled).map((s) => s.id),
+    ].join('|');
+    if (!refresh && cache && cache.signature === signature && Date.now() - cache.at < CACHE_TTL_MS) {
+      return cache.value;
+    }
     const value = await build();
-    cache = { at: Date.now(), value };
+    cache = { at: Date.now(), value, signature };
     return value;
   });
 }

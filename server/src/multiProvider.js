@@ -1,6 +1,12 @@
 import { getConfig } from './config.js';
 import { normalizeShow } from './normalize.js';
 import { httpError } from './errors.js';
+import {
+  platformChapters,
+  platformLatest,
+  platformSearch,
+  platformStreamUrl,
+} from './goodbosPlatforms.js';
 
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const RETRY_DELAYS_MS = [750, 2000];
@@ -66,7 +72,7 @@ async function fetchEpisodes(source, bookId, fresh = false) {
 
   const promise = (async () => {
     const data = await goodbosRequest(
-      'https://dramabox.goodbos.online',
+      source.config.base || 'https://dramabox.goodbos.online',
       '/api/dramabox/allepisode',
       source.config.apiKey,
       { bookId },
@@ -81,10 +87,38 @@ async function fetchEpisodes(source, bookId, fresh = false) {
   return promise;
 }
 
+async function fetchPlatformChapters(source, bookId, opts, fresh = false) {
+  const key = `${source.id}:${bookId}`;
+  if (!fresh) {
+    const cached = chapterCache.get(key);
+    if (cached && Date.now() - cached.at < CHAPTER_TTL_MS) return cached.raw;
+    const pending = chaptersInFlight.get(key);
+    if (pending) return pending;
+  }
+
+  const promise = (async () => {
+    const data = await platformChapters(source, bookId, opts);
+    chapterCache.set(key, { at: Date.now(), raw: data });
+    pruneChapterCache();
+    return data;
+  })().finally(() => chaptersInFlight.delete(key));
+
+  chaptersInFlight.set(key, promise);
+  return promise;
+}
+
 // GoodBos returns a 0-based chapterIndex, which matches the rest of the app.
 // Using `||` here would turn chapter 0 into 1 and drop episode 1 from "Download all".
 function chapterNumber(item, fallback) {
   return Number(item.chapterIndex ?? item.index ?? fallback);
+}
+
+function firstCdnUrl(cdnList) {
+  for (const cdn of cdnList || []) {
+    const url = cdn.url || cdn.videoUrl || cdn.mp4 || cdn.playUrl;
+    if (url) return url;
+  }
+  return null;
 }
 
 function mapItem(item) {
@@ -99,8 +133,19 @@ function mapItem(item) {
   });
 }
 
+function sharedApiKey() {
+  const cfg = getConfig();
+  const shared = (cfg.sources || []).find((s) => s.type === 'dramabuzz' && s.config?.apiKey);
+  return shared?.config?.apiKey || '';
+}
+
+function sourceApiKey(source) {
+  return source.config?.apiKey || (source.type === 'goodbos' ? sharedApiKey() : '');
+}
+
 export function createMultiProvider({ mock, port, language, requestDelay }) {
   let upstream = { ok: true, at: null };
+  const lang = language || 'en';
 
   function record(ok, err) {
     const at = new Date().toISOString();
@@ -126,6 +171,109 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
     }
   }
 
+  async function latest(page = 1) {
+    return withSource(async (source) => {
+      if (source.type === 'goodbos') {
+        return platformLatest(source, { page, lang, apiKey: sourceApiKey(source) });
+      }
+      if (source.type === 'dramabuzz') {
+        // Use the DramaBox GoodBos endpoint for latest/trending
+        const data = await goodbosRequest(
+          source.config.base || 'https://dramabox.goodbos.online',
+          '/api/dramabox/trending',
+          source.config.apiKey,
+          { lang, page },
+        );
+        const raw = Array.isArray(data) ? data : (data.data || data.results || data.items || []);
+        const items = raw.map(mapItem).filter((s) => s.bookId);
+        return { items, hasMore: items.length >= 10 };
+      }
+      if (source.type === 'dramabos') {
+        const res = await fetch(`https://dramabos.live/dramabox/api/v1/search?keyword=latest&page=${page}`, {
+          headers: { Authorization: `Bearer ${source.config.apiKey}`, Accept: 'application/json' },
+        });
+        const data = await res.json();
+        const items = (data.results || []).map((r) => mapItem({
+          bookId: r.id, bookName: r.title, coverWap: r.cover, chapterCount: r.episodes || 0,
+        }));
+        return { items, hasMore: !!data.hasMore };
+      }
+      throw httpError(501, `Source type ${source.type} not implemented for latest`);
+    });
+  }
+
+  async function search(q, page = 1) {
+    return withSource(async (source) => {
+      if (source.type === 'goodbos') {
+        return platformSearch(source, { q, page, lang, apiKey: sourceApiKey(source) });
+      }
+      if (source.type === 'dramabuzz') {
+        const data = await goodbosRequest(
+          source.config.base || 'https://dramabox.goodbos.online',
+          '/api/dramabox/search',
+          source.config.apiKey,
+          { query: q, lang, page },
+        );
+        const raw = Array.isArray(data) ? data : (data.data || data.results || data.items || []);
+        const items = raw.map(mapItem).filter((s) => s.bookId);
+        return { items, hasMore: items.length >= 10 };
+      }
+      if (source.type === 'dramabos') {
+        const res = await fetch(`https://dramabos.live/dramabox/api/v1/search?keyword=${encodeURIComponent(q)}&page=${page}`, {
+          headers: { Authorization: `Bearer ${source.config.apiKey}`, Accept: 'application/json' },
+        });
+        const data = await res.json();
+        const items = (data.results || []).map((r) => mapItem({
+          bookId: r.id, bookName: r.title, coverWap: r.cover, chapterCount: r.episodes || 0,
+        }));
+        return { items, hasMore: !!data.hasMore };
+      }
+      throw httpError(501, `Search not implemented for ${source.type}`);
+    });
+  }
+
+  async function chapters(bookId, { fresh = false } = {}) {
+    return withSource(async (source) => {
+      if (source.type === 'goodbos') {
+        return fetchPlatformChapters(source, bookId, { lang, apiKey: sourceApiKey(source) }, fresh);
+      }
+      if (source.type === 'dramabuzz') {
+        const raw = await fetchEpisodes(source, bookId, fresh);
+        return {
+          bookId: String(bookId),
+          totalChapters: raw.length,
+          chapters: raw.map((c, i) => ({
+            index: chapterNumber(c, i),
+            chapterId: String(c.chapterId || c.id || i),
+            name: String(c.chapterName || c.name || `Episode ${i + 1}`).trim(),
+            cdnList: c.cdnList || [],
+          })),
+        };
+      }
+      return { bookId: String(bookId), totalChapters: 0, chapters: [] };
+    });
+  }
+
+  async function streamUrl(bookId, index) {
+    return withSource(async (source) => {
+      if (source.type === 'goodbos') {
+        const data = await fetchPlatformChapters(source, bookId, { lang, apiKey: sourceApiKey(source) });
+        const ep = data.chapters.find((c) => c.index === Number(index));
+        const direct = ep?.videoUrl || firstCdnUrl(ep?.cdnList);
+        if (direct) return direct;
+        return platformStreamUrl(source, bookId, index, { lang, apiKey: sourceApiKey(source) });
+      }
+      if (source.type === 'dramabuzz') {
+        const raw = await fetchEpisodes(source, bookId);
+        const ep = raw.find((c, i) => chapterNumber(c, i) === Number(index));
+        const url = ep?.videoUrl || ep?.mp4 || ep?.video?.mp4;
+        if (!url) throw httpError(502, 'No stream URL returned for this episode');
+        return url;
+      }
+      throw httpError(501, 'Stream URL not implemented for this source');
+    });
+  }
+
   return {
     mock,
 
@@ -136,103 +284,16 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
       return { ...upstream };
     },
 
-    async latest(page = 1) {
-      return withSource(async (source) => {
-        if (source.type === 'dramabuzz') {
-          // Use the DramaBox GoodBos endpoint for latest/trending
-          const data = await goodbosRequest(
-            'https://dramabox.goodbos.online',
-            '/api/dramabox/trending',
-            source.config.apiKey,
-            { lang: 'en', page },
-          );
-          const raw = Array.isArray(data) ? data : (data.data || data.results || data.items || []);
-          const items = raw.map(mapItem).filter((s) => s.bookId);
-          return { items, hasMore: items.length >= 10 };
-        }
-        if (source.type === 'dramabos') {
-          const res = await fetch(`https://dramabos.live/dramabox/api/v1/search?keyword=latest&page=${page}`, {
-            headers: { Authorization: `Bearer ${source.config.apiKey}`, Accept: 'application/json' },
-          });
-          const data = await res.json();
-          const items = (data.results || []).map((r) => mapItem({
-            bookId: r.id, bookName: r.title, coverWap: r.cover, chapterCount: r.episodes || 0,
-          }));
-          return { items, hasMore: !!data.hasMore };
-        }
-        throw httpError(501, `Source type ${source.type} not implemented for latest`);
-      });
-    },
-
-    trending: () => this.latest(1).then((r) => r.items),
+    latest,
+    trending: async () => (await latest(1)).items,
     forYou: () => withSource(async () => []),
     recommended: () => withSource(async () => []),
     comingSoon: () => withSource(async () => []),
     dubIndo: () => withSource(async () => []),
     vip: () => withSource(async () => []),
-
-    async search(q, page = 1) {
-      return withSource(async (source) => {
-        if (source.type === 'dramabuzz') {
-          const data = await goodbosRequest(
-            'https://dramabox.goodbos.online',
-            '/api/dramabox/search',
-            source.config.apiKey,
-            { query: q, lang: 'en', page },
-          );
-          const raw = Array.isArray(data) ? data : (data.data || data.results || data.items || []);
-          const items = raw.map(mapItem).filter((s) => s.bookId);
-          return { items, hasMore: items.length >= 10 };
-        }
-        if (source.type === 'dramabos') {
-          const res = await fetch(`https://dramabos.live/dramabox/api/v1/search?keyword=${encodeURIComponent(q)}&page=${page}`, {
-            headers: { Authorization: `Bearer ${source.config.apiKey}`, Accept: 'application/json' },
-          });
-          const data = await res.json();
-          const items = (data.results || []).map((r) => mapItem({
-            bookId: r.id, bookName: r.title, coverWap: r.cover, chapterCount: r.episodes || 0,
-          }));
-          return { items, hasMore: !!data.hasMore };
-        }
-        throw httpError(501, `Search not implemented for ${source.type}`);
-      });
-    },
-
-    async suggest(q) {
-      const { items } = await this.search(q, 1);
-      return items.slice(0, 8);
-    },
-
-    async chapters(bookId, { fresh = false } = {}) {
-      return withSource(async (source) => {
-        if (source.type === 'dramabuzz') {
-          const raw = await fetchEpisodes(source, bookId, fresh);
-          return {
-            bookId: String(bookId),
-            totalChapters: raw.length,
-            chapters: raw.map((c, i) => ({
-              index: chapterNumber(c, i),
-              chapterId: String(c.chapterId || c.id || i),
-              name: String(c.chapterName || c.name || `Episode ${i + 1}`).trim(),
-              cdnList: c.cdnList || [],
-            })),
-          };
-        }
-        return { bookId: String(bookId), totalChapters: 0, chapters: [] };
-      });
-    },
-
-    async streamUrl(bookId, index) {
-      return withSource(async (source) => {
-        if (source.type === 'dramabuzz') {
-          const raw = await fetchEpisodes(source, bookId);
-          const ep = raw.find((c, i) => chapterNumber(c, i) === Number(index));
-          const url = ep?.videoUrl || ep?.mp4 || ep?.video?.mp4;
-          if (!url) throw httpError(502, 'No stream URL returned for this episode');
-          return url;
-        }
-        throw httpError(501, 'Stream URL not implemented for this source');
-      });
-    },
+    search,
+    suggest: async (q) => (await search(q, 1)).items.slice(0, 8),
+    chapters,
+    streamUrl,
   };
 }
