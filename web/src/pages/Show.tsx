@@ -19,6 +19,8 @@ export function Show() {
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [watching, setWatching] = useState<{ index: number; url: string } | null>(null)
+  const [isFav, setIsFav] = useState(false)
+  const [favBusy, setFavBusy] = useState(false)
 
   const loadLibrary = useCallback(() => {
     api
@@ -37,7 +39,6 @@ export function Show() {
       .then((res) => {
         if (cancelled) return
         setDetail(res)
-        // Asking for a show that has no completed episodes returns 404; skip the needless request.
         if (res.episodes.some((ep) => ep.downloaded)) loadLibrary()
       })
       .catch((err) => {
@@ -46,6 +47,7 @@ export function Show() {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
+    api.isFavourite(bookId).then((r) => { if (!cancelled) setIsFav(r.favourite) }).catch(() => undefined)
     return () => {
       cancelled = true
     }
@@ -86,6 +88,23 @@ export function Show() {
       setNotice({ kind: 'err', text: errorMessage(err) })
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function toggleFavourite() {
+    setFavBusy(true)
+    try {
+      if (isFav) {
+        await api.removeFavourite(bookId)
+        setIsFav(false)
+      } else {
+        await api.addFavourite(bookId)
+        setIsFav(true)
+      }
+    } catch (err) {
+      setNotice({ kind: 'err', text: errorMessage(err) })
+    } finally {
+      setFavBusy(false)
     }
   }
 
@@ -197,6 +216,14 @@ export function Show() {
               className={buttonClass()}
             >
               {busy ? 'Queuing...' : 'Download all'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void toggleFavourite()}
+              disabled={favBusy}
+              className={buttonClass('ghost')}
+            >
+              {isFav ? 'Remove from Favourites' : 'Add to Favourites'}
             </button>
           </div>
           {notice && (
