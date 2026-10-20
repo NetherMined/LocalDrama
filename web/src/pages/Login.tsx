@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
-import { buttonClass } from '../components/ui'
 import { errorMessage, safeNext } from '../lib/format'
 import { useStatus } from '../status'
 
@@ -35,16 +34,18 @@ export function Login() {
     try {
       if (mode === 'login') {
         await api.login(password)
+        await reload()
+        navigate(next, { replace: true })
       } else {
-        // First-time admin registration (server accepts if no password is set yet)
-        await api.completeSetup({
+        const res = await api.completeSetup({
           downloadRoot: '',
           language: 'en',
           password,
         })
+        await reload()
+        // First admin goes to the setup wizard to finish download location + sources
+        navigate('/setup', { replace: true })
       }
-      await reload()
-      navigate(next, { replace: true })
     } catch (err) {
       setError(errorMessage(err))
       setSubmitting(false)
@@ -151,7 +152,7 @@ export function Login() {
         <p className="text-center text-xs text-zinc-500">
           {mode === 'login'
             ? 'First time? Register to become the admin and finish setup.'
-            : 'The first account becomes the main admin.'}
+            : 'The first account becomes the main admin and controls sources, downloads, and user access.'}
         </p>
       </form>
     </div>
