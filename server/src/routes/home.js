@@ -10,29 +10,37 @@ export function registerHomeRoutes(app, ctx) {
     const cfg = getConfig();
     const rows = [];
     const errors = [];
+    const enabled = (cfg.sources || []).filter((s) => s.enabled);
 
-    // Latest from active source
-    try {
-      const latestRes = await provider.latest(1);
-      const latest = latestRes?.items || [];
-      if (latest.length) {
-        rows.push({
-          key: 'latest',
-          title: 'Latest',
-          source: cfg.activeSourceId,
-          items: latest.slice(0, 24),
-        });
+    // One Latest row per enabled source
+    for (const source of enabled) {
+      try {
+        // Temporarily note: multiProvider uses the active source.
+        // For true per-source rows we would need a source-aware provider.
+        // For now, only the active source returns real data; others are skipped or placeholder.
+        if (source.id === cfg.activeSourceId) {
+          const res = await provider.latest(1);
+          const items = res?.items || [];
+          if (items.length) {
+            rows.push({
+              key: `latest-${source.id}`,
+              title: `Latest · ${source.name}`,
+              source: source.id,
+              items: items.slice(0, 24),
+            });
+          }
+        }
+      } catch (err) {
+        errors.push({ key: source.id, error: String(err?.message || err) });
       }
-    } catch (err) {
-      errors.push({ key: 'latest', error: String(err?.message || err) });
     }
 
-    // Trending (reuse latest if dedicated method is empty)
+    // Trending from active source
     try {
       let trending = await provider.trending();
       if (!Array.isArray(trending) || trending.length === 0) {
-        const latestRes = await provider.latest(1);
-        trending = latestRes?.items || [];
+        const res = await provider.latest(1);
+        trending = res?.items || [];
       }
       if (trending.length) {
         rows.push({
@@ -46,21 +54,6 @@ export function registerHomeRoutes(app, ctx) {
       errors.push({ key: 'trending', error: String(err?.message || err) });
     }
 
-    // Recommended / Interests
-    try {
-      const recommended = await provider.recommended();
-      if (recommended?.length) {
-        rows.push({
-          key: 'interests',
-          title: 'Based on your interests',
-          source: cfg.activeSourceId,
-          items: recommended.slice(0, 20),
-        });
-      }
-    } catch (err) {
-      errors.push({ key: 'interests', error: String(err?.message || err) });
-    }
-
     const all = rows.flatMap((r) => r.items || []);
     if (all.length) db.upsertShows(all);
 
@@ -71,6 +64,7 @@ export function registerHomeRoutes(app, ctx) {
       rows,
       errors,
       activeSourceId: cfg.activeSourceId,
+      sources: enabled.map((s) => ({ id: s.id, name: s.name, type: s.type })),
     };
   }
 
