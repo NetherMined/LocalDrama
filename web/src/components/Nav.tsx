@@ -144,6 +144,11 @@ export function Nav() {
                 Account
               </Link>
               {isAdmin && (
+                <Link to="/admin/users" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+                  Users
+                </Link>
+              )}
+              {isAdmin && (
                 <Link to="/settings" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                   Settings
                 </Link>

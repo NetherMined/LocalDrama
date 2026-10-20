@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Show } from '../api'
 import { PlayIcon } from './icons'
@@ -9,7 +10,7 @@ interface ShowCardProps {
   /** 0 to 1; draws a thin progress bar over the thumbnail when set. */
   progress?: number
   /** Replaces the default subtitle line. */
-  caption?: string
+  caption?: ReactNode
 }
 
 export function showPath(show: Pick<Show, 'bookId' | 'source'>): string {

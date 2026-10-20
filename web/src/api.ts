@@ -328,6 +328,83 @@ export interface LibraryScanResult {
   removed: number
 }
 
+export interface AdminAccount {
+  id: number
+  username: string
+  role: AccountRole
+  disabled: boolean
+  mustChangePassword: boolean
+  hasPassword: boolean
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export interface AdminUserRow extends AdminAccount {
+  profileCount: number
+  deviceCount: number
+}
+
+export interface AdminWatchSeconds {
+  total: number
+  d7: number
+  d30: number
+}
+
+export interface AdminActivitySummary {
+  account: { id: number; username: string; role: AccountRole; disabled: boolean; lastLoginAt: string | null }
+  profiles: number
+  watchSeconds: AdminWatchSeconds
+  lastActiveAt: string | null
+  currentlyWatching: number
+  favourites: number
+}
+
+/** The activity endpoints send only bookId, name and cover for shows the server has not cached. */
+export type ActivityShow = Pick<Show, 'bookId' | 'name' | 'cover'> & Partial<Omit<Show, 'bookId' | 'name' | 'cover'>>
+
+export interface ActivityCurrent {
+  show: ActivityShow
+  episodeIndex: number
+  position: number
+  duration: number
+  percent: number
+  kind: 'stream' | 'download'
+  updatedAt: string
+}
+
+export interface ActivityWatched {
+  show: ActivityShow
+  episodes: number
+  lastWatchedAt: string
+}
+
+export interface ActivityDay {
+  day: string
+  seconds: number
+}
+
+export interface ActivityProfile {
+  id: number
+  name: string
+  color: string
+  watchSeconds: AdminWatchSeconds
+  daily: ActivityDay[]
+  currentlyWatching: ActivityCurrent[]
+  watched: ActivityWatched[]
+  favourites: ActivityShow[]
+}
+
+export interface AdminUserActivity {
+  account: AdminAccount
+  devices: Device[]
+  profiles: ActivityProfile[]
+}
+
+export interface CreatedUser {
+  account: AdminAccount
+  tempPassword: string
+}
+
 export type AppEvent =
   | { type: 'open' }
   | { type: 'download'; item: DownloadItem }
@@ -510,6 +587,17 @@ export const api = {
     request<{ ok: boolean; error?: string }>('/api/integrations/refresh', { method: 'POST', body: { type } }),
 
   health: () => request<Health>('/api/health'),
+
+  adminUsers: () => request<{ items: AdminUserRow[] }>('/api/admin/users'),
+  adminActivity: () => request<{ items: AdminActivitySummary[] }>('/api/admin/activity'),
+  adminUserActivity: (id: number) => request<AdminUserActivity>(`/api/admin/users/${id}/activity`),
+  createAdminUser: (username: string, role: AccountRole) =>
+    request<CreatedUser>('/api/admin/users', { method: 'POST', body: { username, role } }),
+  updateAdminUser: (id: number, patch: { role?: AccountRole; disabled?: boolean }) =>
+    request<{ account: AdminAccount }>(`/api/admin/users/${id}`, { method: 'PATCH', body: patch }),
+  resetAdminUserPassword: (id: number) =>
+    request<{ tempPassword: string }>(`/api/admin/users/${id}/reset-password`, { method: 'POST' }),
+  deleteAdminUser: (id: number) => request<{ ok: true }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
 }
 
 type Listener = (event: AppEvent) => void

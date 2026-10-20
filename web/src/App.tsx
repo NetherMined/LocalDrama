@@ -7,6 +7,8 @@ import { DownloadsProvider } from './downloads'
 import { safeNext } from './lib/format'
 import { useStatus } from './status'
 import { Account } from './pages/Account'
+import { AdminUserDetail } from './pages/AdminUserDetail'
+import { AdminUsers } from './pages/AdminUsers'
 import { Browse } from './pages/Browse'
 import { Downloads } from './pages/Downloads'
 import { Favourites } from './pages/Favourites'
@@ -132,6 +134,22 @@ export default function App() {
           <Route path="/account" element={<Account />} />
           <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
           <Route path="/profiles" element={<Profiles />} />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminOnly title="Users are managed by admins">
+                <AdminUsers />
+              </AdminOnly>
+            }
+          />
+          <Route
+            path="/admin/users/:id"
+            element={
+              <AdminOnly title="Users are managed by admins">
+                <AdminUserDetail />
+              </AdminOnly>
+            }
+          />
           <Route
             path="/settings"
             element={

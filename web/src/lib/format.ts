@@ -56,3 +56,31 @@ export function fmtMinutesLeft(position: number, duration: number): string {
   const minutes = Math.max(1, Math.round((duration - position) / 60))
   return `${minutes} min left`
 }
+
+export function fmtWatchTime(seconds: number): string {
+  const secs = Math.max(0, seconds)
+  if (secs > 0 && secs < 60) return `${Math.round(secs)}s`
+  const totalMinutes = Math.floor(secs / 60)
+  const hours = Math.floor(totalMinutes / 60)
+  if (hours > 0) return `${hours}h ${totalMinutes % 60}m`
+  return `${totalMinutes}m`
+}
+
+export function parseDay(day: string): Date {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+export function fmtDayShort(day: string): string {
+  return parseDay(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+export function fmtDate(iso: string): string {
+  const ms = Date.parse(iso)
+  if (!Number.isFinite(ms)) return 'unknown'
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export function fmtAgoOrNever(iso: string | null): string {
+  return iso ? fmtAgo(iso) : 'Never'
+}
