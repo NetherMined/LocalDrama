@@ -36,7 +36,7 @@ export function registerAuthRoutes(app, ctx) {
   // which usernames exist.
   const dummyHash = hashPassword('dramaus-timing-guard');
 
-  // Shared by login and bootstrap. Replaces any previous session in this browser and
+  // Used by login. Replaces any previous session in this browser and
   // sets the device cookie when the browser has none yet.
   function signIn(req, reply, accountId) {
     const knownDevice = readDeviceId(req);
@@ -66,16 +66,6 @@ export function registerAuthRoutes(app, ctx) {
     const ok = usable && matches;
     if (!ok) throw httpError(401, 'Invalid username or password');
     return signIn(req, reply, account.id);
-  });
-
-  // First run only: sets the admin password while no account has one.
-  app.post('/api/auth/bootstrap', async (req, reply) => {
-    if (accounts.hasPassword()) throw httpError(409, 'already_bootstrapped');
-    const body = req.body ?? {};
-    const username = typeof body.username === 'string' && body.username.trim() ? body.username.trim() : undefined;
-    const adminId = await accounts.bootstrap({ username, password: body.password });
-    if (adminId === null) throw httpError(409, 'already_bootstrapped');
-    return signIn(req, reply, adminId);
   });
 
   app.post('/api/auth/logout', async (req, reply) => {

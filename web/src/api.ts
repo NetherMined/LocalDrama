@@ -17,6 +17,48 @@ export interface AccountSummary {
   mustChangePassword: boolean
 }
 
+export interface Account extends AccountSummary {
+  disabled: boolean
+  hasPassword: boolean
+  createdAt: string
+}
+
+export interface Device {
+  id: string
+  name: string
+  userAgent: string
+  ip: string
+  firstSeenAt: string
+  lastSeenAt: string
+  current: boolean
+}
+
+export interface AppNotification {
+  id: number
+  kind: string
+  title: string
+  body: string
+  createdAt: string
+  readAt: string | null
+}
+
+export interface StreamProgress {
+  episodeIndex: number
+  position: number
+  duration: number
+  completed: boolean
+}
+
+export interface StreamContinueItem {
+  kind: 'stream'
+  show: Show
+  episodeIndex: number
+  position: number
+  duration: number
+  source: string | null
+  updatedAt: number
+}
+
 export interface AppStatus {
   configured: boolean
   mock: boolean
@@ -27,6 +69,7 @@ export interface AppStatus {
   authenticated: boolean
   account: AccountSummary | null
   needsBootstrap: boolean
+  defaultCredentials: boolean
   profile: Profile | null
   profileRequired: boolean
 }
@@ -289,11 +332,12 @@ export type AppEvent =
   | { type: 'open' }
   | { type: 'download'; item: DownloadItem }
   | { type: 'library'; bookId: string }
+  | { type: 'notification' }
 
 function handleUnauthorized() {
   if (window.location.pathname === '/login') return
   const next = `${window.location.pathname}${window.location.search}`
-  window.location.assign(`/login?next=${encodeURIComponent(next)}`)
+  window.location.assign(`/login?reason=expired&next=${encodeURIComponent(next)}`)
 }
 
 function handlePasswordChangeRequired() {
@@ -327,7 +371,7 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
   }
   if (!res.ok) {
     const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : null
-    if (res.status === 401 && code !== 'invalid_pin') handleUnauthorized()
+    if (res.status === 401 && code === 'sign_in_required') handleUnauthorized()
     if (res.status === 403 && code === 'password_change_required') {
       handlePasswordChangeRequired()
       throw new Error('Set a new password to continue.')
@@ -344,6 +388,10 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
 
 function progressPath(downloadId: number | string) {
   return `/api/progress/${enc(String(downloadId))}`
+}
+
+function watchPath(bookId: string, index: number) {
+  return `/api/watch/${enc(bookId)}/${index}`
 }
 
 const enc = encodeURIComponent
@@ -363,11 +411,18 @@ export const api = {
 
   login: (username: string, password: string) =>
     request<{ account: AccountSummary }>('/api/auth/login', { method: 'POST', body: { username, password } }),
-  bootstrap: (username: string, password: string) =>
-    request<{ account: AccountSummary }>('/api/auth/bootstrap', { method: 'POST', body: { username, password } }),
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
   changePassword: (current: string, next: string) =>
     request<{ ok: true }>('/api/account/password', { method: 'POST', body: { current, next } }),
+  account: () => request<{ account: Account; unread: number }>('/api/account'),
+  devices: () => request<{ items: Device[] }>('/api/account/devices'),
+  removeDevice: (id: string) => request<{ ok: true }>(`/api/account/devices/${enc(id)}`, { method: 'DELETE' }),
+  notifications: () => request<{ items: AppNotification[]; unread: number }>('/api/account/notifications'),
+  markNotificationsRead: (ids?: number[]) =>
+    request<{ ok: true; unread: number }>('/api/account/notifications/read', {
+      method: 'POST',
+      body: ids ? { ids } : {},
+    }),
 
   home: (refresh = false) => request<HomeData>(refresh ? '/api/home?refresh=1' : '/api/home'),
   browseSources: () => request<BrowseSources>('/api/browse/sources'),
@@ -436,6 +491,18 @@ export const api = {
     return navigator.sendBeacon(`${progressPath(downloadId)}?method=PUT`, blob)
   },
   continueWatching: () => request<{ items: ContinueItem[] }>('/api/progress/continue'),
+  watchProgress: (bookId: string) => request<{ items: StreamProgress[] }>(`/api/watch/${enc(bookId)}`),
+  watchContinue: () => request<{ items: StreamContinueItem[] }>('/api/watch/continue'),
+  saveWatch: (bookId: string, index: number, position: number, duration: number, source?: string) =>
+    request<{ ok: true; progress: ProgressInfo }>(watchPath(bookId, index), {
+      method: 'PUT',
+      body: { position, duration, source },
+    }),
+  saveWatchBeacon: (bookId: string, index: number, position: number, duration: number, source?: string): boolean => {
+    if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return false
+    const blob = new Blob([JSON.stringify({ position, duration, source })], { type: 'application/json' })
+    return navigator.sendBeacon(watchPath(bookId, index), blob)
+  },
 
   testIntegration: (type: 'jellyfin' | 'plex', input: { url?: string; apiKey?: string; token?: string }) =>
     request<IntegrationTest>('/api/integrations/test', { method: 'POST', body: { type, ...input } }),
@@ -474,6 +541,7 @@ function openSource() {
     const data = parse<{ bookId: string }>((e as MessageEvent<string>).data)
     if (data) emit({ type: 'library', bookId: data.bookId })
   })
+  es.addEventListener('notification', () => emit({ type: 'notification' }))
   source = es
 }
 

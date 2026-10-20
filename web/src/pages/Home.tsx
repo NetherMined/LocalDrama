@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ContinueItem, type HomeData } from '../api'
+import { api, type ContinueItem, type HomeData, type Show, type StreamContinueItem } from '../api'
 import { Hero } from '../components/Hero'
 import { ShowCard } from '../components/ShowCard'
 import { ShowRow, ShowRowSkeleton } from '../components/ShowRow'
@@ -10,12 +10,63 @@ import { errorMessage, fmtEpisode, fmtMinutesLeft } from '../lib/format'
 
 const SKELETON_ROWS = ['Currently Watching', 'Latest', 'Trending Now']
 const CONTINUE_ID = 'continue-watching'
+const CONTINUE_LIMIT = 20
+
+interface ContinueEntry {
+  show: Show
+  to: string
+  episodeIndex: number
+  position: number
+  duration: number
+}
+
+function downloadEntry(item: ContinueItem): ContinueEntry {
+  return {
+    show: item.show,
+    to: `/watch/${encodeURIComponent(item.show.bookId)}/${encodeURIComponent(String(item.episode.id))}`,
+    episodeIndex: item.episode.episodeIndex,
+    position: item.position,
+    duration: item.duration,
+  }
+}
+
+function streamEntry(item: StreamContinueItem): ContinueEntry {
+  const params = new URLSearchParams()
+  if (item.source) params.set('source', item.source)
+  params.set('ep', String(item.episodeIndex))
+  return {
+    show: item.show,
+    to: `/show/${encodeURIComponent(item.show.bookId)}?${params.toString()}`,
+    episodeIndex: item.episodeIndex,
+    position: item.position,
+    duration: item.duration,
+  }
+}
+
+// Streams carry updatedAt; downloads do not, so the two lists are interleaved by index. Each show appears once,
+// at its first (most recent) place in that order.
+function mergeContinue(streams: StreamContinueItem[], downloads: ContinueItem[]): ContinueEntry[] {
+  const recent = [...streams].sort((a, b) => b.updatedAt - a.updatedAt).map(streamEntry)
+  const local = downloads.map(downloadEntry)
+  const out: ContinueEntry[] = []
+  const seen = new Set<string>()
+  const length = Math.max(recent.length, local.length)
+  for (let i = 0; i < length && out.length < CONTINUE_LIMIT; i++) {
+    for (const entry of [recent[i], local[i]]) {
+      if (!entry || seen.has(entry.show.bookId)) continue
+      seen.add(entry.show.bookId)
+      out.push(entry)
+      if (out.length >= CONTINUE_LIMIT) break
+    }
+  }
+  return out
+}
 
 export function Home() {
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
+  const [continueItems, setContinueItems] = useState<ContinueEntry[]>([])
 
   const load = useCallback(async (refresh: boolean) => {
     setRefreshing(true)
@@ -35,14 +86,15 @@ export function Home() {
 
   useEffect(() => {
     let cancelled = false
-    api
-      .continueWatching()
-      .then((res) => {
-        if (!cancelled) setContinueItems(res.items)
-      })
-      .catch(() => {
-        if (!cancelled) setContinueItems([])
-      })
+    Promise.allSettled([api.continueWatching(), api.watchContinue()]).then(([downloads, streams]) => {
+      if (cancelled) return
+      setContinueItems(
+        mergeContinue(
+          streams.status === 'fulfilled' ? streams.value.items : [],
+          downloads.status === 'fulfilled' ? downloads.value.items : [],
+        ),
+      )
+    })
     return () => {
       cancelled = true
     }
@@ -103,8 +155,8 @@ export function Home() {
             id={CONTINUE_ID}
             title="Currently Watching"
             items={continueItems}
-            itemKey={(item) => `${item.show.bookId}-${String(item.episode.id)}`}
-            render={(item) => <ContinueCard item={item} />}
+            itemKey={(item) => item.show.bookId}
+            render={(item) => <ContinueCard entry={item} />}
             action={refreshButton}
           />
         )}
@@ -149,13 +201,12 @@ export function Home() {
   )
 }
 
-function ContinueCard({ item }: { item: ContinueItem }) {
-  const { show, episode, position, duration } = item
-  const to = `/watch/${encodeURIComponent(show.bookId)}/${encodeURIComponent(String(episode.id))}`
+function ContinueCard({ entry }: { entry: ContinueEntry }) {
+  const { show, to, episodeIndex, position, duration } = entry
   const progress = duration > 0 ? position / duration : 0
   const caption =
     position > 0
-      ? `${fmtEpisode(episode.episodeIndex)} · ${fmtMinutesLeft(position, duration)}`
-      : `Up next: ${fmtEpisode(episode.episodeIndex)}`
+      ? `${fmtEpisode(episodeIndex)} · ${fmtMinutesLeft(position, duration)}`
+      : `Up next: ${fmtEpisode(episodeIndex)}`
   return <ShowCard show={show} to={to} progress={progress} caption={caption} />
 }

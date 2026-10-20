@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { useDownloads } from '../downloads'
 import { useStatus } from '../status'
-import { BellIcon, UserIcon } from './icons'
+import { UserIcon } from './icons'
+import { NotificationsBell } from './NotificationsBell'
 import { ProfileAvatar } from './ProfileAvatar'
 import { SearchBox } from './SearchBox'
 
@@ -18,7 +18,6 @@ interface NavLinkItem {
 
 export function Nav() {
   const { status, reload } = useStatus()
-  const { activeCount } = useDownloads()
   const navigate = useNavigate()
   const location = useLocation()
   const isAdmin = status?.account?.role === 'admin'
@@ -76,6 +75,7 @@ export function Nav() {
       // The session may already be gone; reloading status settles the state.
     }
     await reload()
+    navigate('/login?reason=signed_out', { replace: true })
   }
 
   const popular = location.pathname === '/browse' && new URLSearchParams(location.search).get('sort') === 'popular'
@@ -106,22 +106,7 @@ export function Nav() {
         <div className="flex min-w-0 flex-1 justify-center">
           <SearchBox />
         </div>
-        {isAdmin && (
-        <Link
-          to="/downloads"
-          aria-label={activeCount > 0 ? `Downloads, ${activeCount} active` : 'Downloads'}
-          title="Downloads"
-          className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-        >
-          <BellIcon />
-          {activeCount > 0 && (
-            <span
-              aria-hidden="true"
-              className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-rose-600 ring-2 ring-black"
-            />
-          )}
-        </Link>
-        )}
+        <NotificationsBell />
         <div ref={menuRef} className="relative shrink-0">
           <button
             ref={avatarRef}
@@ -155,6 +140,9 @@ export function Nav() {
               <button type="button" role="menuitem" onClick={() => void switchProfile()} className={menuItemClass}>
                 Switch profile
               </button>
+              <Link to="/account" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+                Account
+              </Link>
               {isAdmin && (
                 <Link to="/settings" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                   Settings

@@ -10,6 +10,10 @@ const TEMP_LENGTH = 12;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 const MAX_USER_AGENT = 300;
+// Seeded on first start so a fresh server can be signed into; the forced
+// password change on first sign-in replaces it.
+export const DEFAULT_ADMIN_USERNAME = 'Admin';
+export const DEFAULT_ADMIN_PASSWORD = '12345';
 
 export function parseUsername(value) {
   const name = typeof value === 'string' ? value.trim() : '';
@@ -113,6 +117,10 @@ export function createAccounts(db, { events }) {
 
   const enabledAdminCount = () => stmts.enabledAdmins.get().n;
   const hasPassword = () => stmts.anyPassword.get().n > 0;
+  let defaultCredentialsActive = false;
+  const clearDefaultFlag = (id) => {
+    if (id === stmts.firstAdmin.get()?.id) defaultCredentialsActive = false;
+  };
 
   function assertUsernameFree(username, exceptId) {
     const found = stmts.byUsername.get(username);
@@ -133,6 +141,27 @@ export function createAccounts(db, { events }) {
   return {
     hasPassword,
     needsBootstrap: () => !hasPassword(),
+    defaultCredentialsActive: () => defaultCredentialsActive,
+
+    // Gives the first admin the default credentials while no account has a password, and
+    // remembers (across restarts) whether they are still in use so sign-in can show them.
+    async seedDefaultAdmin() {
+      const admin = stmts.firstAdmin.get();
+      if (!admin) return;
+      if (!hasPassword()) {
+        const passwordHash = await hashPassword(DEFAULT_ADMIN_PASSWORD);
+        raw.transaction(() => {
+          if (hasPassword()) return;
+          assertUsernameFree(DEFAULT_ADMIN_USERNAME, admin.id);
+          stmts.setUsername.run(DEFAULT_ADMIN_USERNAME, admin.id);
+          stmts.setPassword.run(passwordHash, 1, admin.id);
+        })();
+      }
+      const current = stmts.firstAdmin.get();
+      defaultCredentialsActive =
+        !!current.mustChangePassword && !!current.passwordHash &&
+        (await verifyPassword(DEFAULT_ADMIN_PASSWORD, current.passwordHash));
+    },
 
     list() {
       return stmts.list.all().map((r) => ({
@@ -205,6 +234,7 @@ export function createAccounts(db, { events }) {
           'An admin set a temporary password. Sign in and choose a new one on your Account page.',
         );
       })();
+      clearDefaultFlag(id);
       return { tempPassword: temp };
     },
 
@@ -225,6 +255,7 @@ export function createAccounts(db, { events }) {
         stmts.setPassword.run(passwordHash, 0, id);
         stmts.deleteOtherSessions.run(id, keepToken || '');
       })();
+      clearDefaultFlag(id);
       return { ok: true };
     },
 
@@ -236,6 +267,7 @@ export function createAccounts(db, { events }) {
         stmts.setPassword.run(passwordHash, 0, id);
         stmts.deleteOtherSessions.run(id, keepToken || '');
       })();
+      clearDefaultFlag(id);
       return { ok: true };
     },
 

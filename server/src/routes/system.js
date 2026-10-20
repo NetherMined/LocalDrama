@@ -216,6 +216,7 @@ export function registerSystemRoutes(app, ctx) {
       authenticated: !!account,
       account: account ? { id: account.id, username: account.username, role: account.role, mustChangePassword: account.mustChangePassword } : null,
       needsBootstrap: ctx.accounts.needsBootstrap(),
+      defaultCredentials: ctx.accounts.defaultCredentialsActive(),
       profile,
       profileRequired: !profile,
     };

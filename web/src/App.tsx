@@ -1,9 +1,12 @@
 import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
+import { AdminOnly } from './components/AdminOnly'
 import { Nav } from './components/Nav'
 import { UpstreamBanner } from './components/UpstreamBanner'
 import { ErrorPanel, Spinner, buttonClass } from './components/ui'
 import { DownloadsProvider } from './downloads'
+import { safeNext } from './lib/format'
 import { useStatus } from './status'
+import { Account } from './pages/Account'
 import { Browse } from './pages/Browse'
 import { Downloads } from './pages/Downloads'
 import { Favourites } from './pages/Favourites'
@@ -31,6 +34,12 @@ function NotFound() {
   )
 }
 
+// Where to go after signing in: the login page's own ?next= wins over the page it was opened on.
+function nextPath(pathname: string, search: string): string {
+  if (pathname === '/login') return safeNext(new URLSearchParams(search).get('next'))
+  return `${pathname}${search}`
+}
+
 export default function App() {
   const { status, loading, error, reload } = useStatus()
   const location = useLocation()
@@ -54,27 +63,8 @@ export default function App() {
     )
   }
 
-  if (status.needsBootstrap) {
-    return (
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <Login />
-      </main>
-    )
-  }
-
-  if (!status.configured) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
-        <Routes>
-          <Route path="/setup" element={<Setup />} />
-          <Route path="*" element={<Navigate to="/setup" replace />} />
-        </Routes>
-      </main>
-    )
-  }
-
   if (status.authRequired && !status.authenticated) {
-    const next = `${location.pathname}${location.search}`
+    const next = nextPath(location.pathname, location.search)
     return (
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <Routes>
@@ -93,8 +83,19 @@ export default function App() {
     )
   }
 
+  if (!status.configured) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+        <Routes>
+          <Route path="/setup" element={<Setup />} />
+          <Route path="*" element={<Navigate to="/setup" replace />} />
+        </Routes>
+      </main>
+    )
+  }
+
   if (status.profileRequired) {
-    const next = `${location.pathname}${location.search}`
+    const next = nextPath(location.pathname, location.search)
     return (
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         <Routes>
@@ -117,13 +118,28 @@ export default function App() {
           <Route path="/browse" element={<Browse />} />
           <Route path="/search" element={<Search />} />
           <Route path="/show/:bookId" element={<Show />} />
-          <Route path="/downloads" element={<Downloads />} />
+          <Route
+            path="/downloads"
+            element={
+              <AdminOnly>
+                <Downloads />
+              </AdminOnly>
+            }
+          />
           <Route path="/library" element={<Library />} />
           <Route path="/library/:bookId" element={<LibraryShow />} />
           <Route path="/favourites" element={<Favourites />} />
+          <Route path="/account" element={<Account />} />
           <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
           <Route path="/profiles" element={<Profiles />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route
+            path="/settings"
+            element={
+              <AdminOnly title="Settings are managed by your admin">
+                <Settings />
+              </AdminOnly>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

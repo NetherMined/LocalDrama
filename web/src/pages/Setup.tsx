@@ -7,8 +7,7 @@ import { ErrorPanel, Spinner, buttonClass } from '../components/ui'
 import { LanUrlRow } from '../components/LanUrlRow'
 import { ProxyField } from '../components/ProxyField'
 
-const STEPS = ['Download location', 'Language', 'Connection', 'Advanced', 'Password', 'Network'] as const
-const PASSWORD_STEP = 4
+const STEPS = ['Download location', 'Language', 'Connection', 'Advanced', 'Network'] as const
 const QUALITIES = [720, 540, 360] as const
 
 export function Setup() {
@@ -32,9 +31,6 @@ export function Setup() {
   const [delay, setDelay] = useState(1500)
   const [concurrency, setConcurrency] = useState(1)
   const [quality, setQuality] = useState<number>(720)
-
-  const [password, setPassword] = useState('')
-  const [passwordConfirm, setPasswordConfirm] = useState('')
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -68,7 +64,6 @@ export function Setup() {
 
   const trimmed = root.trim()
   const rootValid = validation !== null && validation.path === trimmed && validation.result.ok
-  const passwordMismatch = password !== passwordConfirm
 
   async function check() {
     setCheckError(null)
@@ -98,7 +93,6 @@ export function Setup() {
         requestDelay: Math.max(0, Math.round(delay) || 0),
         concurrency,
         quality,
-        password: password ? password : undefined,
       })
       await reload()
       navigate('/', { replace: true })
@@ -310,50 +304,6 @@ export function Setup() {
           </div>
         )}
 
-        {step === PASSWORD_STEP && (
-          <div>
-            <h2 className="text-xl font-semibold">Admin password <span className="text-sm font-normal text-muted">(optional)</span></h2>
-            <p className="mt-1 text-sm text-muted">
-              Anyone who can reach this server can use it. Set a password to require sign-in. Leave both fields empty to skip;
-              you can set one later in Settings.
-            </p>
-            <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-2 w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus:border-accent-hi"
-                />
-              </div>
-              <div>
-                <label htmlFor="password-confirm" className="block text-sm font-medium">
-                  Confirm password
-                </label>
-                <input
-                  id="password-confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  aria-invalid={passwordMismatch && passwordConfirm !== '' ? true : undefined}
-                  className="mt-2 w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus:border-accent-hi"
-                />
-              </div>
-            </div>
-            {passwordMismatch && passwordConfirm !== '' && (
-              <p role="alert" className="mt-3 text-sm text-red-300">
-                The passwords do not match.
-              </p>
-            )}
-          </div>
-        )}
-
         {step === lastStep && (
           <div>
             <h2 className="text-xl font-semibold">Open it from other devices</h2>
@@ -397,7 +347,7 @@ export function Setup() {
             <button
               type="button"
               onClick={() => setStep((s) => s + 1)}
-              disabled={(step === 0 && !rootValid) || (step === PASSWORD_STEP && passwordMismatch)}
+              disabled={step === 0 && !rootValid}
               className={buttonClass()}
             >
               Next

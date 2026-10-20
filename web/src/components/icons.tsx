@@ -13,6 +13,14 @@ interface IconProps {
   className?: string
 }
 
+export function CheckIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
 export function GearIcon({ className = 'h-5 w-5' }: IconProps) {
   return (
     <svg {...common} className={className}>

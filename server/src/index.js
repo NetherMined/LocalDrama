@@ -49,6 +49,7 @@ const db = openDb(DATA_DIR, { legacyPasswordHash: config.passwordHash });
 const auth = createAuth(db.raw);
 const events = createEvents();
 const accounts = createAccounts(db, { events });
+await accounts.seedDefaultAdmin();
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 

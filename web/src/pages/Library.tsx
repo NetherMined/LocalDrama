@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 import { api, useEvents, type LibraryShow } from '../api'
 import { EmptyState, GridSkeleton, LoadError, PageHeader, Poster, buttonClass } from '../components/ui'
 import { errorMessage } from '../lib/format'
+import { useStatus } from '../status'
 
 export function Library() {
+  const isAdmin = useStatus().status?.account?.role === 'admin'
   const [shows, setShows] = useState<LibraryShow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -47,9 +49,11 @@ export function Library() {
   return (
     <>
       <PageHeader title="Library">
-        <button type="button" onClick={() => void scan()} disabled={scanning} className={buttonClass('ghost')}>
-          {scanning ? 'Scanning...' : 'Scan library'}
-        </button>
+        {isAdmin && (
+          <button type="button" onClick={() => void scan()} disabled={scanning} className={buttonClass('ghost')}>
+            {scanning ? 'Scanning...' : 'Scan library'}
+          </button>
+        )}
       </PageHeader>
       {scanResult && (
         <p role="status" className="mb-4 text-sm text-emerald-300">

@@ -298,3 +298,84 @@ DB tables: `shows` (cache, upserted from every list response), `downloads` (queu
 4. `npm run build` for web + rebuild container; manual check in browser at :8096.
 
 Each phase stops for confirmation before the next.
+
+---
+
+# Ticket: User accounts, device sign-in, roles and admin activity (2026-10-20)
+
+## Decisions (from user)
+- **Accounts own profiles** (Netflix model): an account signs in on a device, then picks one of its profiles.
+- **In-app notifications only**: no email; accounts are identified by username.
+
+## Current state
+- One optional shared server password (`config.passwordHash`) gates the whole app via an `onRequest` hook;
+  sessions table has no owner. Profiles (`profiles` table) carry `isAdmin` + optional PIN and are global.
+- Favourites (per profile) and progress (per profile) exist, but progress is only saved for *downloaded* episodes:
+  streamed playback (Show page / VideoPlayer) records nothing.
+- Download routes have no role check.
+
+## Model
+- `accounts(id, username UNIQUE COLLATE NOCASE, passwordHash, role 'admin'|'user', mustChangePassword, disabled,
+  createdAt, createdBy, lastLoginAt)`
+- `profiles.accountId` (new column). Admin rights move from profile to account role; `profiles.isAdmin` is ignored.
+- `devices(id TEXT PK, accountId, name, userAgent, ip, firstSeenAt, lastSeenAt)`. A long-lived `dbx_device`
+  cookie identifies the browser; sessions become `sessions(token, accountId, deviceId, createdAt, lastSeenAt)`.
+- `notifications(id, accountId, kind, title, body, createdAt, readAt)`.
+- `watch_progress(profileId, bookId, episodeIndex, sourceId, position, duration, completed, watchedSeconds,
+  updatedAt)` for streams; `watchedSeconds` grows by `min(Δposition, Δwall + 5s)` per save (so seeking or
+  leaving a tab open doesn't inflate it). Downloaded playback also adds watched seconds.
+
+## Migration (automatic, on first start)
+- Create account `admin` (role admin). Its password = the existing shared server password hash if one is set,
+  otherwise `mustChangePassword = 1` and the first visit forces setting one (no default password).
+- All existing profiles → `accountId = admin`. Existing global sessions are dropped (everyone signs in once).
+
+## Phase 1: Server: accounts, devices, sessions, roles
+1. Schema + migration above; `accounts.js` service (create, verify, change password, reset, disable, delete).
+2. `onRequest` gate: every `/api/*` except health, status, `auth/login`, and static assets needs a valid session.
+   Unknown device or no session → 401 `sign_in_required`.
+3. `POST /api/auth/login {username, password}` → session + device cookie; per-IP and per-username rate limit.
+   If the device id is new for that account → notification "New sign-in on <Browser> on <OS>" (UA parsed simply)
+   and the device is recorded. `POST /api/auth/logout`.
+4. `GET /api/account` (me: username, role, mustChangePassword, unread count), `POST /api/account/password
+   {current, next}` (min 8 chars; clears mustChangePassword; signs out other devices), `GET/DELETE
+   /api/account/devices[/:id]`, `GET /api/account/notifications`, `POST /api/account/notifications/read`.
+5. While `mustChangePassword`, every route except account/password, account, auth, and status returns 403
+   `password_change_required`.
+6. Profiles scoped to the signed-in account (list/create/update/delete/select only within it).
+7. Role checks: `requireAdmin` = account role admin. Applied to all `/api/downloads*` (list, enqueue, retry, pause,
+   remove), library scan/delete, sources, settings, and integrations. Users keep browse, stream, library playback,
+   favourites, and progress.
+8. Admin: `GET/POST /api/admin/users`, `PATCH /api/admin/users/:id` (role, disabled), `POST
+   /api/admin/users/:id/reset-password` → temp password returned once and `mustChangePassword = 1`, `DELETE`
+   (can't remove/demote the last admin or yourself). Creating a user also creates its default profile and a
+   notification "Welcome, change your temporary password on your Account page".
+
+## Phase 2: Server: watch tracking + activity reporting
+1. `PUT /api/watch/:bookId/:index {position, duration, source}` for streams (+ beacon POST alias); feeds
+   watched seconds; existing download progress also accrues watched seconds.
+2. Continue Watching merges streamed + downloaded progress.
+3. `GET /api/admin/users/:id/activity` → per profile: currently watching (incomplete, last 14 days, with show
+   info + %), watched (completed episodes grouped by show), favourites, total watch time + last 7/30 days,
+   last active, devices. `GET /api/admin/activity` → summary row per user for the table.
+
+## Phase 3: Web: sign-in, account page, notifications, role-aware UI
+1. Sign-in page (username + password) replaces the shared-password Login; `sign_in_required` anywhere → redirect.
+2. Forced "Set a new password" screen when `mustChangePassword`.
+3. Profile picker shows only the account's profiles (after sign-in).
+4. **Account page** (`/account`): change password, my profiles, **favourites manager** (grid with remove, per
+   profile), signed-in devices with "Sign out", sign out everywhere.
+5. Bell → notifications dropdown (unread dot; new-device and welcome notices; mark read); downloads activity dot
+   only for admins.
+6. Non-admins: hide Downloads nav link, download buttons on Show page, Settings; direct visits show "Ask an admin".
+7. VideoPlayer saves stream progress every 10 s + on pause/unload via the new watch endpoint.
+
+## Phase 4: Web: admin Users & activity
+1. `/admin/users`: table (username, role, status, profiles, last active, watch time 7d), "Create user" dialog
+   (username, role, generated temp password shown once with copy button), reset password, disable/enable,
+   change role, delete.
+2. User detail: per-profile tabs with Currently watching (progress bars), Watched, Favourites, Watch time
+   (total / 7d / 30d), Devices.
+3. Build, rebuild container, screenshot checks, commit.
+
+Each phase stops for confirmation before the next.

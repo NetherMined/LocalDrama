@@ -3,8 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { api, useEvents, type LibraryEpisode, type LibraryShowDetail } from '../api'
 import { ErrorPanel, LoadError, Poster, buttonClass } from '../components/ui'
 import { errorMessage, fmtEpisode, fmtMB } from '../lib/format'
+import { useStatus } from '../status'
 
 export function LibraryShow() {
+  const isAdmin = useStatus().status?.account?.role === 'admin'
   const { bookId = '' } = useParams()
   const [detail, setDetail] = useState<LibraryShowDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -112,15 +114,17 @@ export function LibraryShow() {
                   />
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => void remove(ep)}
-                disabled={deletingId === String(ep.id)}
-                aria-label={`Delete ${fmtEpisode(ep.episodeIndex)} ${ep.name}`}
-                className="mr-3 shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/15 disabled:opacity-40"
-              >
-                {deletingId === String(ep.id) ? 'Deleting...' : 'Delete'}
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => void remove(ep)}
+                  disabled={deletingId === String(ep.id)}
+                  aria-label={`Delete ${fmtEpisode(ep.episodeIndex)} ${ep.name}`}
+                  className="mr-3 shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/15 disabled:opacity-40"
+                >
+                  {deletingId === String(ep.id) ? 'Deleting...' : 'Delete'}
+                </button>
+              )}
             </li>
           ))}
         </ul>

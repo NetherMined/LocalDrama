@@ -7,15 +7,21 @@ import { useStatus } from '../status'
 const inputClass =
   'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500'
 
+const REASON_TEXT: Record<string, string> = {
+  expired: 'Session expired. Sign in again to continue.',
+  signed_out: 'You have been signed out.',
+}
+
 export function Login() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
+  const reason = params.get('reason')
+  const reasonText = REASON_TEXT[reason ?? ''] ?? null
   const { status, reload } = useStatus()
-  const bootstrap = status?.needsBootstrap === true
-  const [username, setUsername] = useState(bootstrap ? 'admin' : '')
+  const defaultCredentials = status?.defaultCredentials === true
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,22 +33,11 @@ export function Login() {
     e.preventDefault()
     setError(null)
     if (!username.trim() || !password) return
-    if (bootstrap) {
-      if (password.length < 8) {
-        setError('Use at least 8 characters')
-        return
-      }
-      if (password !== confirm) {
-        setError('Passwords do not match')
-        return
-      }
-    }
     setSubmitting(true)
     try {
-      if (bootstrap) await api.bootstrap(username.trim(), password)
-      else await api.login(username.trim(), password)
-      await reload()
-      navigate(next, { replace: true })
+      await api.login(username.trim(), password)
+      const fresh = await reload()
+      navigate(fresh?.profileRequired ? `/profiles?next=${encodeURIComponent(next)}` : next, { replace: true })
     } catch (err) {
       setError(errorMessage(err))
       setSubmitting(false)
@@ -58,10 +53,21 @@ export function Login() {
       >
         <div className="text-center">
           <p className="text-3xl font-black tracking-tight text-rose-500">DRAMAUS</p>
-          <h1 className="mt-2 text-2xl font-semibold text-white">
-            {bootstrap ? 'Create the admin password' : 'Sign In'}
-          </h1>
+          <h1 className="mt-2 text-2xl font-semibold text-white">Sign in</h1>
         </div>
+
+        {defaultCredentials && (
+          <p role="note" className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-white/90">
+            First sign-in: username <strong>Admin</strong>, password <strong>12345</strong>. You'll be asked to
+            choose a new password straight away.
+          </p>
+        )}
+
+        {reasonText && !error && (
+          <p role="status" className="rounded-md bg-white/10 px-3 py-2 text-sm text-white/90">
+            {reasonText}
+          </p>
+        )}
 
         <div>
           <label htmlFor="username" className="block text-sm font-medium text-zinc-300">
@@ -71,7 +77,7 @@ export function Login() {
             id="username"
             type="text"
             autoComplete="username"
-            autoFocus={!bootstrap}
+            autoFocus
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className={inputClass}
@@ -85,29 +91,13 @@ export function Login() {
           <input
             id="password"
             type="password"
-            autoComplete={bootstrap ? 'new-password' : 'current-password'}
-            autoFocus={bootstrap}
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={inputClass}
           />
         </div>
 
-        {bootstrap && (
-          <div>
-            <label htmlFor="confirm" className="block text-sm font-medium text-zinc-300">
-              Confirm password
-            </label>
-            <input
-              id="confirm"
-              type="password"
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-        )}
 
         {error && (
           <p role="alert" className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -120,13 +110,11 @@ export function Login() {
           disabled={submitting || !username.trim() || !password}
           className="w-full rounded-md bg-rose-600 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
         >
-          {submitting ? 'Please wait…' : bootstrap ? 'Create admin password' : 'Sign In'}
+          {submitting ? 'Please wait…' : 'Sign in'}
         </button>
 
         <p className="text-center text-xs text-zinc-500">
-          {bootstrap
-            ? 'This server has no admin password yet. The first password you set protects the admin account.'
-            : 'Ask an admin if you do not have an account.'}
+          Use the username and password your admin gave you. Ask an admin if you do not have an account.
         </p>
       </form>
     </div>

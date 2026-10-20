@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail } from '../api'
+import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail, type StreamProgress } from '../api'
 import { useDownloads } from '../downloads'
 import { useStatus } from '../status'
 import { StatusPill } from '../components/StatusPill'
+import { CheckIcon } from '../components/icons'
 import { Poster, LoadError, buttonClass } from '../components/ui'
-import { VideoPlayer } from '../components/VideoPlayer'
+import { VideoPlayer, type PlayerSample } from '../components/VideoPlayer'
 import { errorMessage, fmtEpisode } from '../lib/format'
 
 type Display = 'none' | DownloadStatus | 'downloaded'
@@ -23,9 +24,15 @@ export function Show() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const [watching, setWatching] = useState<{ index: number; url: string; hls: boolean } | null>(null)
+  const [watching, setWatching] = useState<{ index: number; url: string; hls: boolean; startAt: number } | null>(null)
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
+  const [progressByEp, setProgressByEp] = useState<Map<number, StreamProgress>>(() => new Map())
+  const [progressReady, setProgressReady] = useState(false)
+  const epParam = searchParams.get('ep')
+  const autoOpened = useRef<string | null>(null)
+  const currentBook = useRef(bookId)
+  currentBook.current = bookId
 
   const loadLibrary = useCallback(() => {
     api
@@ -39,6 +46,18 @@ export function Show() {
     setLoading(true)
     setError(null)
     setNotice(null)
+    setWatching(null)
+    setProgressByEp(new Map())
+    setProgressReady(false)
+    api
+      .watchProgress(bookId)
+      .then((res) => {
+        if (!cancelled) setProgressByEp(new Map(res.items.map((p) => [p.episodeIndex, p])))
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setProgressReady(true)
+      })
     api
       .show(bookId, source)
       .then((res) => {
@@ -113,6 +132,12 @@ export function Show() {
     }
   }
 
+  // Resumes an unfinished episode from where it was left; a few seconds in is not worth resuming.
+  function resumeAt(index: number): number {
+    const p = progressByEp.get(index)
+    return p && !p.completed && p.position > 5 ? p.position : 0
+  }
+
   async function watchEpisode(index: number) {
     setNotice(null)
     try {
@@ -124,11 +149,41 @@ export function Show() {
       }
       const { url, hls } = await res.json()
       if (!url) throw new Error('No stream URL returned')
-      setWatching({ index, url, hls: !!hls })
+      setWatching({ index, url, hls: !!hls, startAt: resumeAt(index) })
     } catch (err) {
       setNotice({ kind: 'err', text: errorMessage(err) })
     }
   }
+
+  // Deep link from Continue Watching: /show/<id>?ep=<index> opens that episode once its progress is known.
+  useEffect(() => {
+    if (epParam === null || loading || !progressReady || !detail) return
+    const key = `${bookId}:${epParam}`
+    if (autoOpened.current === key) return
+    autoOpened.current = key
+    const index = Number(epParam)
+    if (!Number.isInteger(index) || !detail.episodes.some((ep) => ep.index === index)) return
+    void watchEpisode(index)
+    // watchEpisode reads the progress map of the render that triggered this effect.
+  }, [bookId, epParam, loading, progressReady, detail])
+
+  const saveWatch = useCallback(
+    (index: number, sample: PlayerSample, beacon: boolean) => {
+      if (beacon) {
+        api.saveWatchBeacon(bookId, index, sample.position, sample.duration, source)
+        return
+      }
+      const forBook = bookId
+      api
+        .saveWatch(bookId, index, sample.position, sample.duration, source)
+        .then((res) => {
+          if (currentBook.current !== forBook) return
+          setProgressByEp((prev) => new Map(prev).set(index, { episodeIndex: index, ...res.progress }))
+        })
+        .catch(() => undefined)
+    },
+    [bookId, source],
+  )
 
   if (loading) {
     return (
@@ -168,6 +223,8 @@ export function Show() {
             src={watching.url}
             hls={watching.hls}
             poster={show?.cover}
+            startAt={watching.startAt}
+            onSave={(sample, beacon) => saveWatch(watching.index, sample, beacon)}
           />
           <div className="flex items-center justify-between bg-ink px-4 py-2 text-sm">
             <span>Episode {watching.index}</span>
@@ -253,12 +310,32 @@ export function Show() {
           <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel">
             {episodes.map((ep) => {
               const d = displayOf(ep)
+              const p = progressByEp.get(ep.index)
+              const percent = p && p.duration > 0 ? Math.min(100, Math.round((p.position / p.duration) * 100)) : 0
               return (
-                <li key={ep.index} className="flex items-center gap-3 px-3 py-3 sm:px-4">
+                <li key={ep.index} className="relative flex items-center gap-3 px-3 py-3 sm:px-4">
                   <span className="w-10 shrink-0 font-mono text-xs text-muted">{fmtEpisode(ep.index)}</span>
                   <span className="min-w-0 flex-1 truncate text-sm">{ep.name || `Episode ${ep.index + 1}`}</span>
+                  {p?.completed && (
+                    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-300">
+                      <CheckIcon className="h-3.5 w-3.5" />
+                      Watched
+                    </span>
+                  )}
                   {d.state !== 'none' && (
                     <StatusPill status={d.state} bytesDone={d.bytesDone} bytesTotal={d.bytesTotal} />
+                  )}
+                  {p && !p.completed && percent > 0 && (
+                    <div
+                      role="progressbar"
+                      aria-label={`${fmtEpisode(ep.index)} progress`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={percent}
+                      className="absolute inset-x-0 bottom-0 h-0.5 bg-white/10"
+                    >
+                      <div className="h-full bg-accent-hi" style={{ width: `${percent}%` }} />
+                    </div>
                   )}
                   <button
                     type="button"

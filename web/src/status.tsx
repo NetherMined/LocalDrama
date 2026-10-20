@@ -6,7 +6,7 @@ interface StatusValue {
   status: AppStatus | null
   loading: boolean
   error: string | null
-  reload: () => Promise<void>
+  reload: () => Promise<AppStatus | null>
 }
 
 const StatusContext = createContext<StatusValue | null>(null)
@@ -21,10 +21,13 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      setStatus(await api.status())
+      const next = await api.status()
+      setStatus(next)
       setError(null)
+      return next
     } catch (err) {
       setError(errorMessage(err))
+      return null
     } finally {
       setLoading(false)
     }

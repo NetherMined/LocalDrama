@@ -31,7 +31,7 @@ export function ChangePassword() {
     try {
       await api.changePassword(current, next)
       await reload()
-      navigate('/', { replace: true })
+      navigate('/account', { replace: true })
     } catch (err) {
       setError(errorMessage(err))
       setSubmitting(false)
@@ -45,6 +45,7 @@ export function ChangePassword() {
       // The session may already be gone; reloading status settles the state.
     }
     await reload()
+    navigate('/login?reason=signed_out', { replace: true })
   }
 
   return (
