@@ -13,6 +13,7 @@ export function Watch() {
   const navigate = useNavigate()
   const [detail, setDetail] = useState<LibraryShowDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
 
   const load = useCallback(() => {
     setError(null)
@@ -22,7 +23,6 @@ export function Watch() {
       .catch((err) => setError(errorMessage(err)))
   }, [bookId])
 
-  // Reload on every episode change so each Player gets its saved progress as of now.
   useEffect(() => {
     setDetail(null)
     load()
@@ -41,6 +41,14 @@ export function Watch() {
     navigate(`/watch/${encodeURIComponent(bookId)}/${encodeURIComponent(String(ep.id))}`)
   }
 
+  useEffect(() => {
+    if (fullscreen) {
+      document.documentElement.requestFullscreen?.().catch(() => undefined)
+    } else {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined)
+    }
+  }, [fullscreen])
+
   if (error) return <LoadError title="Could not load this episode" message={error} onRetry={load} />
   if (!detail) return <p className="py-8 text-sm text-muted">Loading...</p>
 
@@ -58,29 +66,39 @@ export function Watch() {
   const showName = detail.show?.name ?? bookId
 
   return (
-    <div className="space-y-5">
-      <Player key={String(current.id)} bookId={bookId} episode={current} next={next} onGo={go} />
+    <div className={fullscreen ? 'fixed inset-0 z-50 bg-black' : 'space-y-5'}>
+      <Player
+        key={String(current.id)}
+        bookId={bookId}
+        episode={current}
+        next={next}
+        onGo={go}
+        fullscreen={fullscreen}
+        onToggleFullscreen={() => setFullscreen((f) => !f)}
+      />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-sm text-muted">
-            <Link to={`/library/${encodeURIComponent(bookId)}`} className="hover:text-white">
-              {showName}
-            </Link>
-          </p>
-          <h1 className="text-xl font-bold sm:text-2xl">
-            <span className="font-mono text-accent-hi">{fmtEpisode(current.episodeIndex)}</span> {current.name}
-          </h1>
+      {!fullscreen && (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm text-muted">
+              <Link to={`/library/${encodeURIComponent(bookId)}`} className="hover:text-white">
+                {showName}
+              </Link>
+            </p>
+            <h1 className="text-xl font-bold sm:text-2xl">
+              <span className="font-mono text-rose-400">{fmtEpisode(current.episodeIndex)}</span> {current.name}
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" disabled={!prev} onClick={() => prev && go(prev)} className={buttonClass('ghost')}>
+              &larr; Previous
+            </button>
+            <button type="button" disabled={!next} onClick={() => next && go(next)} className={buttonClass()}>
+              Next &rarr;
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button type="button" disabled={!prev} onClick={() => prev && go(prev)} className={buttonClass('ghost')}>
-            &larr; Previous
-          </button>
-          <button type="button" disabled={!next} onClick={() => next && go(next)} className={buttonClass()}>
-            Next &rarr;
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -90,12 +108,13 @@ interface PlayerProps {
   episode: LibraryEpisode
   next: LibraryEpisode | undefined
   onGo: (ep: LibraryEpisode) => void
+  fullscreen: boolean
+  onToggleFullscreen: () => void
 }
 
-function Player({ episode, next, onGo }: PlayerProps) {
+function Player({ episode, next, onGo, fullscreen, onToggleFullscreen }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const snapRef = useRef<{ position: number; duration: number } | null>(null)
-  // Nothing is saved until the saved position has been applied, so an early exit cannot overwrite it with 0.
   const resumedRef = useRef(false)
   const lastSaveRef = useRef(0)
   const [remaining, setRemaining] = useState<number | null>(null)
@@ -146,7 +165,7 @@ function Player({ episode, next, onGo }: PlayerProps) {
   const upNext = next !== undefined && !cancelled && remaining !== null && remaining > 0 && remaining <= UP_NEXT_SECONDS
 
   return (
-    <div className="relative overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70">
+    <div className={`relative overflow-hidden bg-black ${fullscreen ? 'h-full w-full' : 'rounded-lg shadow-2xl shadow-black/70'}`}>
       <video
         ref={videoRef}
         src={episode.mediaUrl}
@@ -154,7 +173,7 @@ function Player({ episode, next, onGo }: PlayerProps) {
         autoPlay
         playsInline
         preload="auto"
-        className="aspect-video w-full"
+        className={fullscreen ? 'h-full w-full object-contain' : 'aspect-video w-full'}
         onLoadedMetadata={(e) => {
           const v = e.currentTarget
           if (saved && !saved.completed && saved.position > RESUME_MIN_SECONDS && saved.position < v.duration) {
@@ -162,6 +181,8 @@ function Player({ episode, next, onGo }: PlayerProps) {
           }
           resumedRef.current = true
           snapshot()
+          // Auto-enter fullscreen on play for a Netflix-like experience
+          if (!fullscreen) onToggleFullscreen()
         }}
         onTimeUpdate={(e) => {
           const v = e.currentTarget
@@ -182,14 +203,14 @@ function Player({ episode, next, onGo }: PlayerProps) {
         <div
           role="region"
           aria-label="Up next"
-          className="absolute right-3 bottom-14 left-3 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-ink/90 p-4 shadow-xl shadow-black/60 backdrop-blur sm:right-5 sm:bottom-16 sm:left-auto sm:w-96"
+          className="absolute right-4 bottom-20 left-4 flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black/90 p-4 shadow-xl backdrop-blur sm:right-6 sm:bottom-24 sm:left-auto sm:w-96"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-xs tracking-wider text-muted uppercase">
+            <p className="text-xs tracking-wider text-zinc-400 uppercase">
               Up next in {Math.ceil(remaining ?? 0)}s
             </p>
-            <p className="truncate text-sm font-semibold">
-              <span className="font-mono text-accent-hi">{fmtEpisode(next.episodeIndex)}</span> {next.name}
+            <p className="truncate text-sm font-semibold text-white">
+              <span className="font-mono text-rose-400">{fmtEpisode(next.episodeIndex)}</span> {next.name}
             </p>
           </div>
           <button type="button" onClick={() => setCancelled(true)} className={buttonClass('ghost')}>
@@ -199,6 +220,16 @@ function Player({ episode, next, onGo }: PlayerProps) {
             Play now
           </button>
         </div>
+      )}
+
+      {fullscreen && (
+        <button
+          type="button"
+          onClick={onToggleFullscreen}
+          className="absolute top-4 right-4 rounded-md bg-black/60 px-3 py-1.5 text-xs text-white hover:bg-black/80"
+        >
+          Exit fullscreen
+        </button>
       )}
     </div>
   )
