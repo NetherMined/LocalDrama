@@ -13,62 +13,56 @@ export function defaultIntegrations() {
   };
 }
 
+const GOODBOS_PLATFORMS = [
+  { id: 'dramabox', name: 'DramaBox', base: 'https://dramabox.goodbos.online' },
+  { id: 'reelshort', name: 'ReelShort', base: 'https://reelshort.goodbos.online' },
+  { id: 'shortmax', name: 'ShortMax', base: 'https://shortmax.goodbos.online' },
+  { id: 'goodshort', name: 'GoodShort', base: 'https://goodshort.goodbos.online' },
+  { id: 'flickreels', name: 'FlickReels', base: 'https://flickreels.goodbos.online' },
+  { id: 'dramabite', name: 'DramaBite', base: 'https://dramabite.goodbos.online' },
+  { id: 'netshort', name: 'NetShort', base: 'https://netshort.goodbos.online' },
+  { id: 'dramawave', name: 'DramaWave', base: 'https://dramawave.goodbos.online' },
+  { id: 'starshort', name: 'StarShort', base: 'https://drakula.goodbos.online' },
+  { id: 'flextv', name: 'FlexTV', base: 'https://flextv.goodbos.online' },
+  { id: 'vigloo', name: 'Vigloo', base: 'https://vigloo.goodbos.online' },
+  { id: 'melolo', name: 'Melolo', base: 'https://melolo.goodbos.online' },
+  { id: 'velolo', name: 'Velolo', base: 'https://velolo.goodbos.online' },
+  { id: 'dotdrama', name: 'DotDrama', base: 'https://dotdrama.goodbos.online' },
+  { id: 'rapidtv', name: 'RapidTV', base: 'https://rapidtv.goodbos.online' },
+  { id: 'reelbuzz', name: 'ReelBuzz', base: 'https://reelbuzz.goodbos.online' },
+  { id: 'moboreels', name: 'MoboReels', base: 'https://moboreels.goodbos.online' },
+  { id: 'reelife', name: 'Reelife', base: 'https://reelife.goodbos.online' },
+  { id: 'storyreel', name: 'Storyreel', base: 'https://storyreel.goodbos.online' },
+  { id: 'flareflow', name: 'FlareFlow', base: 'https://plerplow.goodbos.online' },
+  { id: 'vibeshort', name: 'Vibeshort', base: 'https://vibeshort.goodbos.online' },
+  { id: 'serialplus', name: 'Serial+', base: 'https://serealplus.goodbos.online' },
+];
+
 export function defaultSources() {
+  const shared = { apiKey: '' };
   return [
     {
       id: 'dramabuzz',
       type: 'dramabuzz',
       name: 'DramaBuzz / GoodBos (shared key)',
       enabled: true,
-      config: { apiKey: '' },
+      config: shared,
       lastHealth: null,
     },
-    {
-      id: 'flareflow',
+    ...GOODBOS_PLATFORMS.map((p) => ({
+      id: p.id,
       type: 'goodbos',
-      name: 'FlareFlow',
-      enabled: true,
-      config: { apiKey: '', base: 'https://plerplow.goodbos.online', platform: 'flareflow' },
+      name: p.name,
+      enabled: p.id === 'dramabox',
+      config: { ...shared, base: p.base, platform: p.id },
       lastHealth: null,
-    },
-    {
-      id: 'reelshort',
-      type: 'goodbos',
-      name: 'ReelShort',
-      enabled: true,
-      config: { apiKey: '', base: 'https://reelshort.goodbos.online', platform: 'reelshort' },
-      lastHealth: null,
-    },
-    {
-      id: 'vibeshort',
-      type: 'goodbos',
-      name: 'Vibeshort',
-      enabled: true,
-      config: { apiKey: '', base: 'https://vibeshort.goodbos.online', platform: 'vibeshort' },
-      lastHealth: null,
-    },
-    {
-      id: 'serialplus',
-      type: 'goodbos',
-      name: 'Serial+',
-      enabled: true,
-      config: { apiKey: '', base: 'https://serealplus.goodbos.online', platform: 'serialplus' },
-      lastHealth: null,
-    },
+    })),
     {
       id: 'dramabos',
       type: 'dramabos',
       name: 'DramaBos',
-      enabled: true,
-      config: { apiKey: '' },
-      lastHealth: null,
-    },
-    {
-      id: 'dramabox',
-      type: 'dramabox',
-      name: 'Dramabox (official — proxy removed)',
       enabled: false,
-      config: { proxyUrl: '' },
+      config: { apiKey: '' },
       lastHealth: null,
     },
   ];
@@ -84,7 +78,7 @@ export const DEFAULT_CONFIG = {
   passwordHash: '',
   configured: false,
   mdns: true,
-  activeSourceId: 'dramabuzz',
+  activeSourceId: 'dramabox',
   sources: defaultSources(),
   integrations: defaultIntegrations(),
 };
