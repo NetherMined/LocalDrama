@@ -52,6 +52,8 @@ export function createProfiles(db) {
     update: raw.prepare('UPDATE profiles SET name = ?, color = ?, pinHash = ? WHERE id = ?'),
     remove: raw.prepare('DELETE FROM profiles WHERE id = ?'),
     removeProgress: raw.prepare('DELETE FROM progress WHERE profileId = ?'),
+    removeWatchProgress: raw.prepare('DELETE FROM watch_progress WHERE profileId = ?'),
+    removeWatchDaily: raw.prepare('DELETE FROM watch_daily WHERE profileId = ?'),
     removeFavourites: raw.prepare('DELETE FROM favourites WHERE profileId = ?'),
     removeSessions: raw.prepare('DELETE FROM profile_sessions WHERE profileId = ?'),
     session: raw.prepare('SELECT * FROM profile_sessions WHERE token = ?'),
@@ -144,6 +146,8 @@ export function createProfiles(db) {
       if (stmts.countByAccount.get(account.id).n <= 1) throw httpError(400, 'An account needs at least one profile');
       raw.transaction(() => {
         stmts.removeProgress.run(id);
+        stmts.removeWatchProgress.run(id);
+        stmts.removeWatchDaily.run(id);
         stmts.removeFavourites.run(id);
         stmts.removeSessions.run(id);
         stmts.remove.run(id);

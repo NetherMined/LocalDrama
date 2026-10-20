@@ -97,6 +97,25 @@ CREATE TABLE IF NOT EXISTS progress (
 );
 CREATE INDEX IF NOT EXISTS progress_download ON progress(downloadId);
 CREATE INDEX IF NOT EXISTS progress_profile_updated ON progress(profileId, updatedAt);
+CREATE TABLE IF NOT EXISTS watch_progress (
+  profileId INTEGER NOT NULL,
+  bookId TEXT NOT NULL,
+  episodeIndex INTEGER NOT NULL,
+  sourceId TEXT,
+  position REAL NOT NULL DEFAULT 0,
+  duration REAL NOT NULL DEFAULT 0,
+  completed INTEGER NOT NULL DEFAULT 0,
+  watchedSeconds REAL NOT NULL DEFAULT 0,
+  updatedAt INTEGER NOT NULL,
+  PRIMARY KEY (profileId, bookId, episodeIndex)
+);
+CREATE INDEX IF NOT EXISTS watch_progress_profile_updated ON watch_progress(profileId, updatedAt);
+CREATE TABLE IF NOT EXISTS watch_daily (
+  profileId INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  seconds REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (profileId, day)
+);
 CREATE TABLE IF NOT EXISTS favourites (
   profileId INTEGER NOT NULL,
   bookId TEXT NOT NULL,
@@ -121,6 +140,9 @@ const ADDED_COLUMNS = {
   },
   shows: {
     sourceId: 'TEXT',
+  },
+  progress: {
+    watchedSeconds: 'REAL NOT NULL DEFAULT 0',
   },
 };
 

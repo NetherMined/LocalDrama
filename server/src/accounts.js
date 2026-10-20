@@ -81,6 +81,8 @@ export function createAccounts(db, { events }) {
     insertProfile: raw.prepare('INSERT INTO profiles (name, color, pinHash, isAdmin, createdAt, accountId) VALUES (?, ?, NULL, 0, ?, ?)'),
     deleteProfile: raw.prepare('DELETE FROM profiles WHERE id = ?'),
     deleteProgress: raw.prepare('DELETE FROM progress WHERE profileId = ?'),
+    deleteWatchProgress: raw.prepare('DELETE FROM watch_progress WHERE profileId = ?'),
+    deleteWatchDaily: raw.prepare('DELETE FROM watch_daily WHERE profileId = ?'),
     deleteFavourites: raw.prepare('DELETE FROM favourites WHERE profileId = ?'),
     deleteProfileSessions: raw.prepare('DELETE FROM profile_sessions WHERE profileId = ?'),
     deleteAccountSessions: raw.prepare('DELETE FROM sessions WHERE accountId = ?'),
@@ -271,6 +273,8 @@ export function createAccounts(db, { events }) {
       raw.transaction(() => {
         for (const { id: profileId } of stmts.profileIds.all(id)) {
           stmts.deleteProgress.run(profileId);
+          stmts.deleteWatchProgress.run(profileId);
+          stmts.deleteWatchDaily.run(profileId);
           stmts.deleteFavourites.run(profileId);
           stmts.deleteProfileSessions.run(profileId);
           stmts.deleteProfile.run(profileId);

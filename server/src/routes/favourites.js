@@ -4,15 +4,6 @@ export function registerFavouriteRoutes(app, ctx) {
   const { db, profiles } = ctx;
   const raw = db.raw;
 
-  raw.exec(`
-    CREATE TABLE IF NOT EXISTS favourites (
-      profileId INTEGER NOT NULL,
-      bookId TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      PRIMARY KEY (profileId, bookId)
-    );
-  `);
-
   const add = raw.prepare('INSERT OR IGNORE INTO favourites (profileId, bookId, createdAt) VALUES (?, ?, ?)');
   const remove = raw.prepare('DELETE FROM favourites WHERE profileId = ? AND bookId = ?');
   const list = raw.prepare(`

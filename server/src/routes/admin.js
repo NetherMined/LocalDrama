@@ -1,4 +1,5 @@
 import { httpError } from '../errors.js';
+import { createActivity } from '../activity.js';
 
 function parseId(value) {
   const id = Number(value);
@@ -7,7 +8,18 @@ function parseId(value) {
 }
 
 export function registerAdminRoutes(app, ctx) {
-  const { accounts, profiles } = ctx;
+  const { accounts, profiles, db } = ctx;
+  const activity = createActivity({ db, accounts });
+
+  app.get('/api/admin/activity', async (req) => {
+    profiles.requireAdmin(req);
+    return { items: activity.summary() };
+  });
+
+  app.get('/api/admin/users/:id/activity', async (req) => {
+    profiles.requireAdmin(req);
+    return activity.user(parseId(req.params.id));
+  });
 
   app.get('/api/admin/users', async (req) => {
     profiles.requireAdmin(req);

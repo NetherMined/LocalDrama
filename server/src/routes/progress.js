@@ -1,16 +1,10 @@
 import { httpError } from '../errors.js';
+import { parseSeconds } from '../progress.js';
 
 function parseId(value) {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) throw httpError(400, 'Invalid download id');
   return id;
-}
-
-function parseSeconds(value, name) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    throw httpError(400, `${name} must be a non-negative number`);
-  }
-  return value;
 }
 
 export function registerProgressRoutes(app, ctx) {
