@@ -279,6 +279,36 @@ export interface Suggestion {
   bookId: string
   name: string
   cover: string
+  source: string | null
+  sourceName: string | null
+  tags: string[]
+}
+
+export interface SearchCategory {
+  name: string
+  count: number
+}
+
+export interface SearchSuggestions {
+  items: Suggestion[]
+  categories: SearchCategory[]
+}
+
+export interface SearchPlatform {
+  id: string
+  name: string
+  count: number
+}
+
+export interface SearchError {
+  source: string
+  name: string
+  error: string
+}
+
+export interface SearchResults extends Page<Show> {
+  platforms: SearchPlatform[]
+  errors: SearchError[]
 }
 
 export interface ShowDetail {
@@ -512,8 +542,13 @@ export const api = {
     if (sort) query.set('sort', sort)
     return request<Page<Show>>(`/api/browse/latest?${query.toString()}`)
   },
-  search: (q: string, page = 1) => request<Page<Show>>(`/api/search?q=${enc(q)}&page=${page}`),
-  suggest: (q: string) => request<{ items: Suggestion[] }>(`/api/search/suggest?q=${enc(q)}`),
+  search: (q: string, page = 1, source?: string, local = false) => {
+    const query = new URLSearchParams({ q, page: String(page) })
+    if (source) query.set('source', source)
+    if (local) query.set('local', '1')
+    return request<SearchResults>(`/api/search?${query.toString()}`)
+  },
+  suggest: (q: string) => request<SearchSuggestions>(`/api/search/suggest?q=${enc(q)}`),
   show: (bookId: string, source?: string) =>
     request<ShowDetail>(`/api/shows/${enc(bookId)}${source ? `?source=${enc(source)}` : ''}`),
 

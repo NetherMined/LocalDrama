@@ -3,6 +3,7 @@ import { getConfig } from '../config.js';
 import { httpError } from '../errors.js';
 import { isHlsUrl } from '../platforms/common.js';
 import { parseCount } from '../normalize.js';
+import { queryTokens } from '../db.js';
 
 const CATEGORY_LIMIT = 30;
 const CATEGORY_MIN_CACHED = 10;
@@ -32,6 +33,139 @@ function sourceName(id) {
 
 function hasTag(show, tagKey) {
   return (show.tags || []).some((t) => String(t).toLowerCase() === tagKey);
+}
+
+const SUGGEST_LIMIT = 8;
+const SUGGEST_CATEGORY_LIMIT = 3;
+const LOCAL_SEARCH_LIMIT = 40;
+const UPSTREAM_TIMEOUT_MS = 8000;
+const UPSTREAM_CONCURRENCY = 4;
+const SEARCH_CACHE_TTL_MS = 2 * 60 * 1000;
+const SEARCH_CACHE_MAX = 100;
+const searchCache = new Map();
+
+function searchCacheGet(key) {
+  const hit = searchCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > SEARCH_CACHE_TTL_MS) {
+    searchCache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function searchCacheSet(key, value) {
+  if (!searchCache.has(key) && searchCache.size >= SEARCH_CACHE_MAX) {
+    searchCache.delete(searchCache.keys().next().value);
+  }
+  searchCache.set(key, { at: Date.now(), value });
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(httpError(504, `No response within ${ms / 1000} s`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+function isNameMatch(show, tokens) {
+  const words = String(show.name || '').toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  return tokens.every((t) => words.some((w) => w.startsWith(t)));
+}
+
+function interleave(lists) {
+  const out = [];
+  for (let i = 0; ; i++) {
+    let any = false;
+    for (const list of lists) {
+      if (i < list.length) {
+        out.push(list[i]);
+        any = true;
+      }
+    }
+    if (!any) return out;
+  }
+}
+
+function dedupe(list) {
+  const keys = new Set();
+  const bare = new Set();
+  const out = [];
+  for (const show of list) {
+    const id = String(show.bookId);
+    if (!show.source) {
+      if (bare.has(id)) continue;
+      bare.add(id);
+    }
+    const key = `${show.source || ''}:${id}`;
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push(show);
+  }
+  return out;
+}
+
+async function searchFirstPage(ctx, q, source) {
+  const { db, provider } = ctx;
+  const tokens = queryTokens(q);
+  const local = db.searchLocal(q, { limit: LOCAL_SEARCH_LIMIT, sourceId: source });
+  const enabled = provider.listEnabledSources();
+  const targets = source ? enabled.filter((s) => s.id === source) : enabled;
+  const errors = [];
+  if (source && targets.length === 0) errors.push({ source, name: source, error: 'Platform is not enabled' });
+
+  const outcomes = await mapLimit(targets, UPSTREAM_CONCURRENCY, async (target) => {
+    try {
+      const result = await withTimeout(provider.search(q, 1, { sourceId: target.id }), UPSTREAM_TIMEOUT_MS);
+      const items = (result.items || [])
+        .filter((s) => s.bookId)
+        .map((s) => ({ ...s, source: s.source || target.id, sourceName: s.sourceName || target.name }));
+      return { target, items };
+    } catch (err) {
+      return { target, items: [], error: String(err?.message || err) };
+    }
+  });
+
+  const upstream = [];
+  for (const outcome of outcomes) {
+    if (outcome.error) errors.push({ source: outcome.target.id, name: outcome.target.name, error: outcome.error });
+    upstream.push(...outcome.items);
+  }
+  db.upsertShows(upstream);
+
+  const nameHits = local.filter((s) => isNameMatch(s, tokens));
+  const otherLocal = local.filter((s) => !isNameMatch(s, tokens));
+  const merged = dedupe([
+    ...nameHits,
+    ...interleave(outcomes.map((o) => o.items)),
+    ...otherLocal,
+  ]);
+
+  const counts = new Map();
+  for (const show of merged) {
+    const entry = counts.get(show.source) || { id: show.source, name: show.sourceName || show.source, count: 0 };
+    entry.count += 1;
+    counts.set(show.source, entry);
+  }
+  const platforms = [...counts.values()]
+    .filter((p) => p.id)
+    .sort((a, b) => b.count - a.count);
+
+  return { items: merged, hasMore: false, platforms, errors };
 }
 
 export function registerBrowseRoutes(app, ctx) {
@@ -105,17 +239,42 @@ export function registerBrowseRoutes(app, ctx) {
   app.get('/api/search', async (req) => {
     const q = String(req.query.q || '').trim();
     if (!q) throw httpError(400, 'q is required');
-    const { items, hasMore } = await provider.search(q, pageParam(req.query.page), { sourceId: optionalSource(req.query.source) });
-    db.upsertShows(items);
-    return { items, hasMore };
+    const source = optionalSource(req.query.source);
+    const page = pageParam(req.query.page);
+
+    if (page > 1) {
+      if (!source) return { items: [], hasMore: false, platforms: [], errors: [] };
+      const result = await provider.search(q, page, { sourceId: source });
+      const items = result.items || [];
+      db.upsertShows(items);
+      return { items, hasMore: !!result.hasMore, platforms: [], errors: [] };
+    }
+
+    // Instant first paint for the Search page while the platforms are still being asked.
+    if (req.query.local === '1') {
+      return { items: db.searchLocal(q, { limit: LOCAL_SEARCH_LIMIT, sourceId: source }), hasMore: false, platforms: [], errors: [] };
+    }
+
+    const key = `${q.toLowerCase().replace(/\s+/g, ' ')}|${source || ''}`;
+    const cached = searchCacheGet(key);
+    if (cached) return cached;
+    const value = await searchFirstPage(ctx, q, source);
+    searchCacheSet(key, value);
+    return value;
   });
 
   app.get('/api/search/suggest', async (req) => {
     const q = String(req.query.q || '').trim();
-    if (!q) return { items: [] };
-    const shows = await provider.suggest(q);
-    db.upsertShows(shows);
-    return { items: shows.map(({ bookId, name, cover }) => ({ bookId, name, cover })) };
+    if (q.length < 2) return { items: [], categories: [] };
+    const items = db.searchLocal(q, { limit: SUGGEST_LIMIT }).map((s) => ({
+      bookId: s.bookId,
+      name: s.name,
+      cover: s.cover,
+      source: s.source,
+      sourceName: s.sourceName,
+      tags: s.tags,
+    }));
+    return { items, categories: db.matchingTags(q, SUGGEST_CATEGORY_LIMIT) };
   });
 
   app.get('/api/shows/:bookId', async (req) => {

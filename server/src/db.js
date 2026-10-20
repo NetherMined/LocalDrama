@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getConfig } from './config.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS shows (
@@ -216,6 +217,60 @@ ON CONFLICT(bookId) DO UPDATE SET
   sourceId = COALESCE(excluded.sourceId, shows.sourceId)
 `;
 
+// `tags` is a JSON array string; brackets and quotes are blanked so each tag indexes as words.
+function tagsText(alias) {
+  return `replace(replace(replace(${alias}.tags, '[', ' '), ']', ' '), '"', ' ')`;
+}
+
+const FTS_SCHEMA = `
+CREATE VIRTUAL TABLE IF NOT EXISTS shows_fts USING fts5(name, tags, introduction, content='shows', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2');
+CREATE TRIGGER IF NOT EXISTS shows_fts_ai AFTER INSERT ON shows BEGIN
+  INSERT INTO shows_fts(rowid, name, tags, introduction)
+  VALUES (new.rowid, new.name, ${tagsText('new')}, new.introduction);
+END;
+CREATE TRIGGER IF NOT EXISTS shows_fts_ad AFTER DELETE ON shows BEGIN
+  INSERT INTO shows_fts(shows_fts, rowid, name, tags, introduction)
+  VALUES ('delete', old.rowid, old.name, ${tagsText('old')}, old.introduction);
+END;
+CREATE TRIGGER IF NOT EXISTS shows_fts_au AFTER UPDATE ON shows BEGIN
+  INSERT INTO shows_fts(shows_fts, rowid, name, tags, introduction)
+  VALUES ('delete', old.rowid, old.name, ${tagsText('old')}, old.introduction);
+  INSERT INTO shows_fts(rowid, name, tags, introduction)
+  VALUES (new.rowid, new.name, ${tagsText('new')}, new.introduction);
+END;
+`;
+
+// Returns false (search falls back to LIKE) when FTS5 is unavailable. Rebuilds the index
+// when it does not cover every show, which is the case on first start after the upgrade.
+function setupSearchIndex(raw) {
+  try {
+    raw.transaction(() => raw.exec(FTS_SCHEMA))();
+    const shows = raw.prepare('SELECT COUNT(*) AS n FROM shows').get().n;
+    const indexed = raw.prepare('SELECT COUNT(*) AS n FROM shows_fts_docsize').get().n;
+    if (shows !== indexed) raw.exec("INSERT INTO shows_fts(shows_fts) VALUES('rebuild')");
+    return true;
+  } catch (err) {
+    console.warn(`Search index unavailable, using LIKE search: ${err.message}`);
+    return false;
+  }
+}
+
+export function queryTokens(q) {
+  return String(q || '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function escapeLike(text) {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+function sourceNameMap() {
+  return new Map((getConfig().sources || []).map((s) => [s.id, s.name]));
+}
+
 export function toShow(row) {
   return {
     bookId: row.bookId,
@@ -238,6 +293,7 @@ export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
   ensureColumns(raw);
   dropGlobalProfileNameUnique(raw);
   migrateAccounts(raw, legacyPasswordHash);
+  const ftsReady = setupSearchIndex(raw);
 
   const upsert = raw.prepare(UPSERT_SHOW);
   const getShowStmt = raw.prepare('SELECT * FROM shows WHERE bookId = ?');
@@ -271,6 +327,54 @@ export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
     },
     showsBySource(sourceId, limit = 500) {
       return showsBySourceStmt.all(String(sourceId), limit).map(toShow);
+    },
+    searchLocal(q, { limit = 20, sourceId } = {}) {
+      const tokens = queryTokens(q);
+      if (!tokens.length) return [];
+      const params = [];
+      const where = [];
+      if (ftsReady) {
+        where.push('shows_fts MATCH ?');
+        params.push(tokens.map((t) => `"${t}"*`).join(' AND '));
+      } else {
+        for (const t of tokens) {
+          const like = `%${escapeLike(t)}%`;
+          where.push("(s.name LIKE ? ESCAPE '\\' OR s.tags LIKE ? ESCAPE '\\' OR s.introduction LIKE ? ESCAPE '\\')");
+          params.push(like, like, like);
+        }
+      }
+      if (sourceId) {
+        where.push('s.sourceId = ?');
+        params.push(String(sourceId));
+      }
+      // Titles containing the typed phrase beat word-by-word matches ("he bro" should find
+      // "He Broke…" before "My Three Brothers…"), then bm25 / recency decides.
+      const phrase = escapeLike(tokens.join(' ').toLowerCase());
+      const phraseRank = `CASE WHEN lower(s.name) LIKE ? ESCAPE '\\' THEN 0
+        WHEN lower(s.name) LIKE ? ESCAPE '\\' THEN 1
+        WHEN lower(s.name) LIKE ? ESCAPE '\\' THEN 2 ELSE 3 END`;
+      const order = `${phraseRank}, ${ftsReady ? 'bm25(shows_fts, 10.0, 3.0, 1.0)' : 's.updatedAt DESC'}`;
+      const from = ftsReady
+        ? 'shows_fts JOIN shows s ON s.rowid = shows_fts.rowid'
+        : 'shows s';
+      const rows = raw.prepare(`SELECT s.* FROM ${from} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`)
+        .all(...params, `${phrase}%`, `% ${phrase}%`, `%${phrase}%`, limit);
+      const names = sourceNameMap();
+      return rows.map((row) => ({ ...toShow(row), sourceName: names.get(row.sourceId) ?? null }));
+    },
+    matchingTags(q, limit = 3) {
+      const needle = String(q || '').trim().toLowerCase();
+      if (needle.length < 2) return [];
+      return raw.prepare(`
+        SELECT name, count FROM (
+          SELECT MIN(trim(j.value)) AS name, lower(trim(j.value)) AS key, COUNT(DISTINCT s.bookId) AS count
+          FROM shows s, json_each(s.tags) j
+          WHERE typeof(j.value) = 'text' AND lower(trim(j.value)) LIKE ? ESCAPE '\\'
+          GROUP BY lower(trim(j.value))
+        )
+        ORDER BY CASE WHEN key LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, count DESC, name
+        LIMIT ?
+      `).all(`%${escapeLike(needle)}%`, `${escapeLike(needle)}%`, limit);
     },
   };
 }
