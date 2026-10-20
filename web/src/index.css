@@ -64,3 +64,16 @@ select {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+@media (pointer: coarse) {
+  button,
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  textarea {
+    min-height: 44px;
+  }
+
+  button {
+    min-width: 44px;
+  }
+}

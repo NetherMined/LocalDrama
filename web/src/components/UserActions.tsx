@@ -115,7 +115,7 @@ export function UserActions({ user, isSelf, variant, onChanged, onDeleted, onNot
           to={item.to}
           role={asMenu ? 'menuitem' : undefined}
           onClick={() => setMenuOpen(false)}
-          className={`${asMenu ? menuItemClass : buttonClass('ghost')} ${asMenu ? toneClass : ''}`}
+          className={`${asMenu ? menuItemClass : `${buttonClass('ghost')} min-h-11`} ${asMenu ? toneClass : ''}`}
         >
           {item.label}
         </Link>

@@ -432,7 +432,7 @@ function SettingsPage() {
           </p>
         )}
         <div className="mt-5 space-y-2">
-          <label className="flex items-center gap-3 text-sm font-medium">
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
             <input
               type="checkbox"
               checked={current.mdns}
@@ -459,7 +459,7 @@ function SettingsPage() {
       </Section>
 
       <Section id="profiles-link" title="Profiles" description="Add, edit or remove the people who can watch on this server.">
-        <Link to="/profiles?manage=1" className={buttonClass('ghost')}>
+        <Link to="/profiles?manage=1" className={`${buttonClass('ghost')} min-h-11`}>
           Manage profiles
         </Link>
       </Section>

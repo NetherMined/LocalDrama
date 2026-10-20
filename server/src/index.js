@@ -153,7 +153,13 @@ if (MOCK) {
 
 const hasWebDist = fs.existsSync(path.join(WEB_DIST, 'index.html'));
 if (hasWebDist) {
-  await app.register(fastifyStatic, { root: WEB_DIST });
+  await app.register(fastifyStatic, {
+    root: WEB_DIST,
+    cacheControl: false,
+    setHeaders(res, filePath) {
+      res.setHeader('Cache-Control', path.basename(filePath) === 'sw.js' ? 'no-cache' : 'public, max-age=0');
+    },
+  });
 }
 
 app.setNotFoundHandler((req, reply) => {

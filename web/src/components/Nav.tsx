@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useStatus } from '../status'
+import { useInstall } from '../install'
+import { BottomTabs } from './BottomTabs'
+import { InstallDialog } from './InstallDialog'
 import { UserIcon } from './icons'
 import { NotificationsBell } from './NotificationsBell'
 import { ProfileAvatar } from './ProfileAvatar'
@@ -24,6 +27,8 @@ export function Nav() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [installOpen, setInstallOpen] = useState(false)
+  const { installed } = useInstall()
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
 
@@ -89,13 +94,14 @@ export function Nav() {
   ]
 
   return (
+    <>
     <header
       className={`sticky top-0 z-40 transition-colors duration-300 ${
         scrolled ? 'bg-black/95 backdrop-blur' : 'bg-gradient-to-b from-black/90 to-black/0'
       }`}
     >
       <div className="flex items-center gap-3 px-4 pt-3 sm:gap-4 sm:px-6 lg:px-10">
-        <Link to="/" className="shrink-0 rounded text-lg font-black tracking-tight text-rose-600 sm:text-xl">
+        <Link to="/" className="inline-flex min-h-11 shrink-0 items-center rounded text-lg font-black tracking-tight text-rose-600 sm:text-xl">
           DRAMAUS
         </Link>
         {status?.mock && (
@@ -143,6 +149,19 @@ export function Nav() {
               <Link to="/account" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                 Account
               </Link>
+              {!installed && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setInstallOpen(true)
+                  }}
+                  className={menuItemClass}
+                >
+                  Install app
+                </button>
+              )}
               {isAdmin && (
                 <Link to="/admin/users" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                   Users
@@ -170,7 +189,7 @@ export function Nav() {
       </div>
       <nav
         aria-label="Main"
-        className="no-scrollbar flex items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm sm:px-6 lg:px-10"
+        className="no-scrollbar hidden items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm sm:flex sm:px-6 lg:px-10"
       >
         {links.filter((item) => isAdmin || item.to !== '/downloads').map((item) => (
           <Link
@@ -186,5 +205,8 @@ export function Nav() {
         ))}
       </nav>
     </header>
+      {installOpen && <InstallDialog onClose={() => setInstallOpen(false)} />}
+      <BottomTabs isAdmin={isAdmin} />
+    </>
   )
 }

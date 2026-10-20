@@ -64,6 +64,7 @@ export interface AppStatus {
   mock: boolean
   version: string
   lanUrls: string[]
+  publicUrl?: string
   upstream?: UpstreamStatus
   authRequired: boolean
   authenticated: boolean

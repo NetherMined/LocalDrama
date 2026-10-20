@@ -37,7 +37,7 @@ export function Account() {
       </div>
 
       <Section id="profiles" title="Profiles" description="Each profile keeps its own favourites and watch progress.">
-        <Link to="/profiles" className={buttonClass('ghost')}>
+        <Link to="/profiles" className={`${buttonClass('ghost')} min-h-11`}>
           Manage profiles
         </Link>
       </Section>
@@ -165,7 +165,7 @@ function FavouritesCard({ profileName }: { profileName: string | null }) {
       description={profileName ? `Favourites for ${profileName}.` : 'Favourites for the current profile.'}
     >
       <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
-        <Link to="/profiles" className="font-semibold text-accent-hi hover:text-white">
+        <Link to="/profiles" className="inline-flex min-h-11 items-center font-semibold text-accent-hi hover:text-white">
           Switch profile
         </Link>
       </div>

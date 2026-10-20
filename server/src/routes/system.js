@@ -211,6 +211,7 @@ export function registerSystemRoutes(app, ctx) {
       mock: ctx.mock,
       version: pkg.version,
       lanUrls: lanUrls(ctx.port),
+      publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
       upstream: ctx.provider.health(),
       authRequired: true,
       authenticated: !!account,

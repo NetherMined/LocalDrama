@@ -141,7 +141,7 @@ export function SearchBox() {
       role="search"
       onSubmit={onSubmit}
       onBlur={onBlur}
-      className="relative w-full sm:max-w-xl max-sm:static max-sm:focus-within:absolute max-sm:focus-within:left-4 max-sm:focus-within:w-[calc(100vw-2rem)] max-sm:focus-within:top-3 max-sm:focus-within:z-50"
+      className="relative w-full min-w-0 sm:max-w-xl max-sm:focus-within:absolute max-sm:focus-within:left-4 max-sm:focus-within:w-[calc(100vw-2rem)] max-sm:focus-within:top-3 max-sm:focus-within:z-50"
     >
       <label htmlFor="site-search" className="sr-only">
         Search dramas

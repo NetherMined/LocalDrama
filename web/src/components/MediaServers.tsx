@@ -43,7 +43,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 
 function ToggleField({ id, checked, onChange }: { id: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label htmlFor={id} className="flex items-center gap-3 text-sm">
+    <label htmlFor={id} className="flex min-h-11 items-center gap-3 text-sm">
       <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-accent" />
       Enabled
     </label>

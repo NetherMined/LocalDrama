@@ -134,7 +134,7 @@ export function SourcesPanel() {
         return (
           <div key={s.id} className="rounded-lg border border-line p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2">
+              <label className="flex min-h-11 items-center gap-2">
                 <input
                   type="checkbox"
                   checked={s.enabled}

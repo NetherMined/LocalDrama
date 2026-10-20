@@ -66,7 +66,7 @@ export function AdminUsers() {
 
       {rows && rows.length > 0 && (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] md:block">
+          <div className="relative hidden overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] md:block">
             <table className="w-full min-w-[880px] text-left text-sm">
               <caption className="sr-only">Accounts with sign-in status and activity</caption>
               <thead className="border-b border-white/10 text-xs tracking-wider text-muted uppercase">
@@ -198,7 +198,7 @@ function UserCard({
           <UserInitial username={user.username} className="h-10 w-10 text-base" />
           <div className="min-w-0">
             <p className="flex min-w-0 items-center">
-              <Link to={`/admin/users/${user.id}`} className="truncate font-semibold text-white hover:text-accent-hi">
+              <Link to={`/admin/users/${user.id}`} className="inline-flex min-h-11 max-w-full items-center truncate font-semibold text-white hover:text-accent-hi">
                 {user.username}
               </Link>
               {isSelf && <SelfMark />}

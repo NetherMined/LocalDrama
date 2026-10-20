@@ -6,7 +6,7 @@ import { ShowGrid } from '../components/ShowGrid'
 import { EmptyState, PageHeader, buttonClass } from '../components/ui'
 
 function chipClass(active: boolean) {
-  return `rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+  return `inline-flex min-h-11 items-center rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
     active
       ? 'border-white bg-white text-black'
       : 'border-line bg-panel-2 text-white/80 hover:border-white/40 hover:text-white'

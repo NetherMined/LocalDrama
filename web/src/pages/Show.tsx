@@ -482,7 +482,7 @@ function EpisodeTile({
 
 function BackLink() {
   return (
-    <Link to="/browse" className="inline-flex text-sm text-muted hover:text-white">
+    <Link to="/browse" className="inline-flex min-h-11 items-center text-sm text-muted hover:text-white">
       &larr; Back to browse
     </Link>
   )

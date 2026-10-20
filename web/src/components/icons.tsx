@@ -182,3 +182,79 @@ export function SkipForwardIcon({ className = 'h-5 w-5' }: IconProps) {
     </svg>
   )
 }
+
+export function ShareIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M12 3v12" />
+      <path d="m7 8 5-5 5 5" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+  )
+}
+
+export function AddSquareIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  )
+}
+
+export function MoreVerticalIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </svg>
+  )
+}
+
+export function HomeIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+    </svg>
+  )
+}
+
+export function GridIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
+
+export function BookmarkIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M6 3h12v18l-6-4-6 4z" />
+    </svg>
+  )
+}
+
+export function DownloadIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+  )
+}
+
+export function LibraryIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <rect x="3" y="4" width="5" height="16" rx="1" />
+      <rect x="10" y="4" width="5" height="16" rx="1" />
+      <path d="m17 5 4 1-3 14-4-1z" />
+    </svg>
+  )
+}

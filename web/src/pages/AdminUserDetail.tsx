@@ -330,7 +330,7 @@ export function AdminUserDetail() {
 
 function BackLink() {
   return (
-    <Link to="/admin/users" className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-white">
+    <Link to="/admin/users" className="inline-flex min-h-11 items-center gap-1 text-sm text-muted transition hover:text-white">
       <ChevronLeftIcon className="h-4 w-4" />
       Users
     </Link>

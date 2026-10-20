@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
 import { AdminOnly } from './components/AdminOnly'
+import { InstallBanner } from './components/InstallBanner'
 import { Nav } from './components/Nav'
 import { UpstreamBanner } from './components/UpstreamBanner'
 import { ErrorPanel, Spinner, buttonClass } from './components/ui'
@@ -112,7 +113,13 @@ export default function App() {
     <DownloadsProvider>
       <Nav />
       <UpstreamBanner />
-      <main className={location.pathname === '/' ? undefined : 'mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8'}>
+      <main
+        className={
+          location.pathname === '/'
+            ? 'max-sm:pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
+            : 'mx-auto max-w-7xl px-4 py-6 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-8'
+        }
+      >
         <Routes>
           <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />
@@ -161,6 +168,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      {!location.pathname.startsWith('/watch/') && <InstallBanner />}
     </DownloadsProvider>
   )
 }
