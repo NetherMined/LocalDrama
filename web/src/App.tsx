@@ -6,6 +6,7 @@ import { DownloadsProvider } from './downloads'
 import { useStatus } from './status'
 import { Browse } from './pages/Browse'
 import { Downloads } from './pages/Downloads'
+import { Favourites } from './pages/Favourites'
 import { Home } from './pages/Home'
 import { Library } from './pages/Library'
 import { LibraryShow } from './pages/LibraryShow'
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="/downloads" element={<Downloads />} />
           <Route path="/library" element={<Library />} />
           <Route path="/library/:bookId" element={<LibraryShow />} />
+          <Route path="/favourites" element={<Favourites />} />
           <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
           <Route path="/profiles" element={<Profiles />} />
           <Route path="/settings" element={<Settings />} />
