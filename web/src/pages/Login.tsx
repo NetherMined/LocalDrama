@@ -4,48 +4,45 @@ import { api } from '../api'
 import { errorMessage, safeNext } from '../lib/format'
 import { useStatus } from '../status'
 
+const inputClass =
+  'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500'
+
 export function Login() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
   const { status, reload } = useStatus()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [email, setEmail] = useState('')
+  const bootstrap = status?.needsBootstrap === true
+  const [username, setUsername] = useState(bootstrap ? 'admin' : '')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (status && (!status.authRequired || status.authenticated)) {
-      navigate(next, { replace: true })
-    }
+    if (status?.authenticated) navigate(next, { replace: true })
   }, [status, next, navigate])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (mode === 'register' && password !== confirm) {
-      setError('Passwords do not match')
-      return
+    if (!username.trim() || !password) return
+    if (bootstrap) {
+      if (password.length < 8) {
+        setError('Use at least 8 characters')
+        return
+      }
+      if (password !== confirm) {
+        setError('Passwords do not match')
+        return
+      }
     }
-    if (!password) return
     setSubmitting(true)
     try {
-      if (mode === 'login') {
-        await api.login(password)
-        await reload()
-        navigate(next, { replace: true })
-      } else {
-        await api.completeSetup({
-          downloadRoot: '',
-          language: 'en',
-          password,
-        })
-        await reload()
-        // First admin goes to the setup wizard to finish download location + sources
-        navigate('/setup', { replace: true })
-      }
+      if (bootstrap) await api.bootstrap(username.trim(), password)
+      else await api.login(username.trim(), password)
+      await reload()
+      navigate(next, { replace: true })
     } catch (err) {
       setError(errorMessage(err))
       setSubmitting(false)
@@ -60,49 +57,26 @@ export function Login() {
         className="relative z-10 w-full max-w-md space-y-6 rounded-2xl border border-white/10 bg-black/70 p-8 shadow-2xl backdrop-blur-xl"
       >
         <div className="text-center">
-          <p className="text-3xl font-black tracking-tight text-rose-500">LOCALDRAMA</p>
+          <p className="text-3xl font-black tracking-tight text-rose-500">DRAMAUS</p>
           <h1 className="mt-2 text-2xl font-semibold text-white">
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+            {bootstrap ? 'Create the admin password' : 'Sign In'}
           </h1>
         </div>
 
-        <div className="flex rounded-lg bg-zinc-900 p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => setMode('login')}
-            className={`flex-1 rounded-md py-2 font-medium transition ${
-              mode === 'login' ? 'bg-rose-600 text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('register')}
-            className={`flex-1 rounded-md py-2 font-medium transition ${
-              mode === 'register' ? 'bg-rose-600 text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Register
-          </button>
+        <div>
+          <label htmlFor="username" className="block text-sm font-medium text-zinc-300">
+            Username
+          </label>
+          <input
+            id="username"
+            type="text"
+            autoComplete="username"
+            autoFocus={!bootstrap}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className={inputClass}
+          />
         </div>
-
-        {mode === 'register' && (
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
-              Email or username
-            </label>
-            <input
-              id="email"
-              type="text"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
-              placeholder="you@example.com"
-            />
-          </div>
-        )}
 
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
@@ -111,15 +85,15 @@ export function Login() {
           <input
             id="password"
             type="password"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            autoFocus
+            autoComplete={bootstrap ? 'new-password' : 'current-password'}
+            autoFocus={bootstrap}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+            className={inputClass}
           />
         </div>
 
-        {mode === 'register' && (
+        {bootstrap && (
           <div>
             <label htmlFor="confirm" className="block text-sm font-medium text-zinc-300">
               Confirm password
@@ -130,7 +104,7 @@ export function Login() {
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+              className={inputClass}
             />
           </div>
         )}
@@ -143,16 +117,16 @@ export function Login() {
 
         <button
           type="submit"
-          disabled={submitting || !password}
+          disabled={submitting || !username.trim() || !password}
           className="w-full rounded-md bg-rose-600 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
         >
-          {submitting ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
+          {submitting ? 'Please wait…' : bootstrap ? 'Create admin password' : 'Sign In'}
         </button>
 
         <p className="text-center text-xs text-zinc-500">
-          {mode === 'login'
-            ? 'First time? Register to become the admin and finish setup.'
-            : 'The first account becomes the main admin and controls sources, downloads, and user access.'}
+          {bootstrap
+            ? 'This server has no admin password yet. The first password you set protects the admin account.'
+            : 'Ask an admin if you do not have an account.'}
         </p>
       </form>
     </div>

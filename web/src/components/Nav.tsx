@@ -21,7 +21,7 @@ export function Nav() {
   const { activeCount } = useDownloads()
   const navigate = useNavigate()
   const location = useLocation()
-  const isAdmin = status?.profile?.isAdmin === true
+  const isAdmin = status?.account?.role === 'admin'
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -106,6 +106,7 @@ export function Nav() {
         <div className="flex min-w-0 flex-1 justify-center">
           <SearchBox />
         </div>
+        {isAdmin && (
         <Link
           to="/downloads"
           aria-label={activeCount > 0 ? `Downloads, ${activeCount} active` : 'Downloads'}
@@ -120,6 +121,7 @@ export function Nav() {
             />
           )}
         </Link>
+        )}
         <div ref={menuRef} className="relative shrink-0">
           <button
             ref={avatarRef}
@@ -166,7 +168,7 @@ export function Nav() {
                   disabled={loggingOut}
                   className={menuItemClass}
                 >
-                  Log out
+                  Sign out
                 </button>
               )}
             </div>
@@ -177,7 +179,7 @@ export function Nav() {
         aria-label="Main"
         className="no-scrollbar flex items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm sm:px-6 lg:px-10"
       >
-        {links.map((item) => (
+        {links.filter((item) => isAdmin || item.to !== '/downloads').map((item) => (
           <Link
             key={item.label}
             to={item.to}

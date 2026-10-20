@@ -8,6 +8,15 @@ export interface UpstreamStatus {
   at?: number | string
 }
 
+export type AccountRole = 'admin' | 'user'
+
+export interface AccountSummary {
+  id: number
+  username: string
+  role: AccountRole
+  mustChangePassword: boolean
+}
+
 export interface AppStatus {
   configured: boolean
   mock: boolean
@@ -16,6 +25,8 @@ export interface AppStatus {
   upstream?: UpstreamStatus
   authRequired: boolean
   authenticated: boolean
+  account: AccountSummary | null
+  needsBootstrap: boolean
   profile: Profile | null
   profileRequired: boolean
 }
@@ -285,6 +296,10 @@ function handleUnauthorized() {
   window.location.assign(`/login?next=${encodeURIComponent(next)}`)
 }
 
+function handlePasswordChangeRequired() {
+  if (window.location.pathname !== '/') window.location.assign('/')
+}
+
 function handleProfileRequired() {
   if (window.location.pathname.startsWith('/profiles')) return
   const next = `${window.location.pathname}${window.location.search}`
@@ -313,6 +328,10 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
   if (!res.ok) {
     const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : null
     if (res.status === 401 && code !== 'invalid_pin') handleUnauthorized()
+    if (res.status === 403 && code === 'password_change_required') {
+      handlePasswordChangeRequired()
+      throw new Error('Set a new password to continue.')
+    }
     if (res.status === 403 && code === 'profile_required') {
       handleProfileRequired()
       throw new Error('Choose a profile to continue.')
@@ -342,8 +361,13 @@ export const api = {
   updateSettings: (patch: SettingsPatch) =>
     request<Config>('/api/settings', { method: 'PUT', body: patch }),
 
-  login: (password: string) => request<{ ok: true }>('/api/auth/login', { method: 'POST', body: { password } }),
+  login: (username: string, password: string) =>
+    request<{ account: AccountSummary }>('/api/auth/login', { method: 'POST', body: { username, password } }),
+  bootstrap: (username: string, password: string) =>
+    request<{ account: AccountSummary }>('/api/auth/bootstrap', { method: 'POST', body: { username, password } }),
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
+  changePassword: (current: string, next: string) =>
+    request<{ ok: true }>('/api/account/password', { method: 'POST', body: { current, next } }),
 
   home: (refresh = false) => request<HomeData>(refresh ? '/api/home?refresh=1' : '/api/home'),
   browseSources: () => request<BrowseSources>('/api/browse/sources'),

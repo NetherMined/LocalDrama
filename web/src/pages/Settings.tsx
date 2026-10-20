@@ -173,11 +173,6 @@ function SettingsPage() {
     }
   }
 
-  function removePassword() {
-    if (!window.confirm('Remove the admin password? Anyone who can reach this server will be able to use it.')) return
-    void savePassword('', 'Password removed.')
-  }
-
   async function toggleMdns(enabled: boolean) {
     setMdnsBusy(true)
     setMdnsNotice(null)
@@ -355,11 +350,6 @@ function SettingsPage() {
             <button type="button" onClick={() => setPwEditing(true)} className={buttonClass('ghost')}>
               {current.hasPassword ? 'Change password' : 'Set password'}
             </button>
-            {current.hasPassword && (
-              <button type="button" onClick={removePassword} disabled={pwBusy} className={buttonClass('danger')}>
-                Remove password
-              </button>
-            )}
           </div>
         )}
 

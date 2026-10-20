@@ -11,6 +11,7 @@ import { Home } from './pages/Home'
 import { Library } from './pages/Library'
 import { LibraryShow } from './pages/LibraryShow'
 import { Login } from './pages/Login'
+import { ChangePassword } from './pages/ChangePassword'
 import { Profiles } from './pages/Profiles'
 import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
@@ -53,6 +54,14 @@ export default function App() {
     )
   }
 
+  if (status.needsBootstrap) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <Login />
+      </main>
+    )
+  }
+
   if (!status.configured) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
@@ -72,6 +81,14 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />} />
         </Routes>
+      </main>
+    )
+  }
+
+  if (status.account?.mustChangePassword) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-6 sm:px-6 sm:py-8">
+        <ChangePassword />
       </main>
     )
   }

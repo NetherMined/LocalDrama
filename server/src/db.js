@@ -35,13 +35,45 @@ CREATE TABLE IF NOT EXISTS downloads (
   UNIQUE(bookId, episodeIndex)
 );
 CREATE INDEX IF NOT EXISTS downloads_status ON downloads(status);
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  passwordHash TEXT,
+  role TEXT NOT NULL DEFAULT 'user',
+  mustChangePassword INTEGER NOT NULL DEFAULT 0,
+  disabled INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  createdBy INTEGER,
+  lastLoginAt TEXT
+);
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT NOT NULL,
+  accountId INTEGER NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  userAgent TEXT NOT NULL DEFAULT '',
+  ip TEXT NOT NULL DEFAULT '',
+  firstSeenAt TEXT NOT NULL,
+  lastSeenAt TEXT NOT NULL,
+  PRIMARY KEY (id, accountId)
+);
+CREATE INDEX IF NOT EXISTS devices_account ON devices(accountId);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  accountId INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  createdAt TEXT NOT NULL,
+  readAt TEXT
+);
+CREATE INDEX IF NOT EXISTS notifications_account_read ON notifications(accountId, readAt);
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
   createdAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS profiles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   color TEXT NOT NULL,
   pinHash TEXT,
   isAdmin INTEGER NOT NULL DEFAULT 0,
@@ -65,9 +97,23 @@ CREATE TABLE IF NOT EXISTS progress (
 );
 CREATE INDEX IF NOT EXISTS progress_download ON progress(downloadId);
 CREATE INDEX IF NOT EXISTS progress_profile_updated ON progress(profileId, updatedAt);
+CREATE TABLE IF NOT EXISTS favourites (
+  profileId INTEGER NOT NULL,
+  bookId TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  PRIMARY KEY (profileId, bookId)
+);
 `;
 
 const ADDED_COLUMNS = {
+  sessions: {
+    accountId: 'INTEGER',
+    deviceId: 'TEXT',
+    lastSeenAt: 'TEXT',
+  },
+  profiles: {
+    accountId: 'INTEGER',
+  },
   downloads: {
     attempts: 'INTEGER NOT NULL DEFAULT 0',
     nextAttemptAt: 'INTEGER',
@@ -85,6 +131,52 @@ function ensureColumns(raw) {
       if (!existing.has(name)) raw.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
     }
   }
+}
+
+// Profile names were globally unique; they are now unique per account. SQLite cannot drop a
+// column constraint, so the profiles table is rebuilt once when the old UNIQUE(name) exists.
+function dropGlobalProfileNameUnique(raw) {
+  const unique = raw.prepare('PRAGMA index_list(profiles)').all().some((i) => i.unique && i.origin === 'u');
+  if (!unique) return;
+  raw.transaction(() => {
+    raw.exec(`
+      CREATE TABLE profiles_rebuild (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        pinHash TEXT,
+        isAdmin INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        accountId INTEGER
+      );
+      INSERT INTO profiles_rebuild (id, name, color, pinHash, isAdmin, createdAt, accountId)
+        SELECT id, name, color, pinHash, isAdmin, createdAt, accountId FROM profiles;
+      DROP TABLE profiles;
+      ALTER TABLE profiles_rebuild RENAME TO profiles;
+    `);
+  })();
+}
+
+// Idempotent. On the first start it creates the admin account (carrying over the old shared
+// password hash, if any), attaches unowned profiles to it and drops sessions that predate
+// accounts, so everyone signs in once after the upgrade.
+function migrateAccounts(raw, legacyPasswordHash) {
+  raw.transaction(() => {
+    const now = new Date().toISOString();
+    if (raw.prepare('SELECT COUNT(*) AS n FROM accounts').get().n === 0) {
+      raw.prepare(`INSERT INTO accounts (username, passwordHash, role, mustChangePassword, disabled, createdAt, createdBy)
+        VALUES ('admin', ?, 'admin', 0, 0, ?, NULL)`).run(legacyPasswordHash || null, now);
+    }
+    const admin = raw.prepare("SELECT id FROM accounts WHERE role = 'admin' ORDER BY id LIMIT 1").get();
+    raw.prepare('UPDATE profiles SET accountId = ? WHERE accountId IS NULL').run(admin.id);
+    raw.prepare('DELETE FROM sessions WHERE accountId IS NULL').run();
+    raw.exec('CREATE INDEX IF NOT EXISTS sessions_account ON sessions(accountId)');
+    raw.exec('CREATE UNIQUE INDEX IF NOT EXISTS profiles_account_name ON profiles(accountId, name)');
+    if (raw.prepare('SELECT COUNT(*) AS n FROM profiles').get().n === 0) {
+      raw.prepare('INSERT INTO profiles (name, color, pinHash, isAdmin, createdAt, accountId) VALUES (?, ?, NULL, 0, ?, ?)')
+        .run('Me', '#e11d48', now, admin.id);
+    }
+  })();
 }
 
 const UPSERT_SHOW = `
@@ -116,16 +208,14 @@ export function toShow(row) {
   };
 }
 
-export function openDb(dataDir) {
+export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
   const raw = new Database(path.join(dataDir, 'library.db'));
   raw.pragma('journal_mode = WAL');
   raw.exec(SCHEMA);
   ensureColumns(raw);
-  if (raw.prepare('SELECT COUNT(*) AS n FROM profiles').get().n === 0) {
-    raw.prepare('INSERT INTO profiles (name, color, pinHash, isAdmin, createdAt) VALUES (?, ?, NULL, 1, ?)')
-      .run('Me', '#e11d48', new Date().toISOString());
-  }
+  dropGlobalProfileNameUnique(raw);
+  migrateAccounts(raw, legacyPasswordHash);
 
   const upsert = raw.prepare(UPSERT_SHOW);
   const getShowStmt = raw.prepare('SELECT * FROM shows WHERE bookId = ?');

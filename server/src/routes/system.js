@@ -8,7 +8,6 @@ import DramaboxClient from '@zhadev/dramabox';
 import { getConfig, saveConfig } from '../config.js';
 import { httpError } from '../errors.js';
 import { buildAgent, getProxyUrl, maskProxyUrl, parseProxyUrl, setProxy } from '../proxy.js';
-import { hashPassword } from '../auth.js';
 import { maskSecret, normalizeUrl, resolveSecret } from '../integrations.js';
 import { isWindowsPath } from '../paths.js';
 
@@ -146,13 +145,6 @@ function parseIntegrations(input, current) {
   return next;
 }
 
-async function passwordPatch(body) {
-  if (body.password === undefined) return {};
-  if (typeof body.password !== 'string') throw httpError(400, 'password must be a string');
-  if (body.password === '') return { passwordHash: '' };
-  return { passwordHash: await hashPassword(body.password) };
-}
-
 function publicConfig(ctx) {
   const { passwordHash, integrations, ...rest } = getConfig();
   const jf = integrations.jellyfin;
@@ -160,7 +152,7 @@ function publicConfig(ctx) {
   return {
     ...rest,
     proxyUrl: maskProxyUrl(rest.proxyUrl),
-    hasPassword: !!passwordHash,
+    hasPassword: ctx.accounts.hasPassword(),
     integrations: {
       jellyfin: { enabled: jf.enabled, url: jf.url, apiKey: maskSecret(jf.apiKey), lastResult: ctx.integrations.lastResult('jellyfin') },
       plex: {
@@ -212,15 +204,18 @@ async function testDramaboxToken(url, language) {
 
 export function registerSystemRoutes(app, ctx) {
   app.get('/api/status', async (req) => {
-    const profile = ctx.profiles.current(req);
+    const account = ctx.auth.accountFromRequest(req);
+    const profile = account ? ctx.profiles.current(req, account) : null;
     return {
       configured: getConfig().configured,
       mock: ctx.mock,
       version: pkg.version,
       lanUrls: lanUrls(ctx.port),
       upstream: ctx.provider.health(),
-      authRequired: !!getConfig().passwordHash,
-      authenticated: ctx.auth.isAuthenticated(req),
+      authRequired: true,
+      authenticated: !!account,
+      account: account ? { id: account.id, username: account.username, role: account.role, mustChangePassword: account.mustChangePassword } : null,
+      needsBootstrap: ctx.accounts.needsBootstrap(),
       profile,
       profileRequired: !profile,
     };
@@ -279,17 +274,17 @@ export function registerSystemRoutes(app, ctx) {
     if (getConfig().configured) throw httpError(409, 'already_configured');
     const body = req.body ?? {};
 
-    // Allow password-only first registration (admin account creation)
+    // Password-only first registration: sets the admin password (only while none is set).
     if (body.password && !body.downloadRoot) {
-      const patch = await passwordPatch(body);
-      saveConfig({ ...patch, configured: false });
+      await ctx.accounts.bootstrap({ password: body.password });
       return { ok: true, needsSetup: true };
     }
 
     const check = await checkWritableDir(body.downloadRoot);
     if (!check.ok) throw httpError(400, check.error);
 
-    const patch = { ...parseSettings(body, { requireLanguage: true }), ...(await passwordPatch(body)) };
+    const patch = parseSettings(body, { requireLanguage: true });
+    if (body.password) await ctx.accounts.bootstrap({ password: body.password });
     saveConfig({ ...patch, downloadRoot: check.resolved, configured: true });
     await applyProxy();
     ctx.provider.setOptions(providerOptions());
@@ -315,7 +310,12 @@ export function registerSystemRoutes(app, ctx) {
     if (body.integrations !== undefined) {
       patch.integrations = parseIntegrations(body.integrations, getConfig().integrations);
     }
-    Object.assign(patch, await passwordPatch(body));
+    if (body.password !== undefined) {
+      if (typeof body.password !== 'string' || body.password === '') {
+        throw httpError(400, 'Password must be 8-200 characters. Accounts always require sign-in.');
+      }
+      await ctx.accounts.setPassword(req.account.id, body.password, ctx.auth.tokenFromRequest(req));
+    }
     saveConfig(patch);
     await applyProxy();
     ctx.provider.setOptions(providerOptions());

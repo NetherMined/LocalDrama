@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api, useEvents, type DownloadItem } from './api'
+import { useStatus } from './status'
 
 interface DownloadsValue {
   items: DownloadItem[]
@@ -17,11 +18,17 @@ function newer(a: DownloadItem, b: DownloadItem): boolean {
 }
 
 export function DownloadsProvider({ children }: { children: ReactNode }) {
+  const { status } = useStatus()
+  const admin = status?.account?.role === 'admin'
   const [byId, setById] = useState<Map<string, DownloadItem>>(() => new Map())
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
+    if (!admin) {
+      setLoaded(true)
+      return
+    }
     try {
       const { items } = await api.downloads()
       setById(new Map(items.map((item) => [String(item.id), item])))
@@ -31,13 +38,14 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoaded(true)
     }
-  }, [])
+  }, [admin])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
   useEvents((event) => {
+    if (!admin) return
     if (event.type === 'open') {
       void refresh()
     } else if (event.type === 'download') {

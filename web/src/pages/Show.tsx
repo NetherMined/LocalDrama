@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail } from '../api'
 import { useDownloads } from '../downloads'
+import { useStatus } from '../status'
 import { StatusPill } from '../components/StatusPill'
 import { Poster, LoadError, buttonClass } from '../components/ui'
 import { VideoPlayer } from '../components/VideoPlayer'
@@ -14,6 +15,7 @@ export function Show() {
   const [searchParams] = useSearchParams()
   const source = searchParams.get('source') || undefined
   const { byEpisode } = useDownloads()
+  const isAdmin = useStatus().status?.account?.role === 'admin'
   const [detail, setDetail] = useState<ShowDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -211,6 +213,7 @@ export function Show() {
           )}
 
           <div className="mt-6 flex flex-wrap gap-3">
+            {isAdmin && (
             <button
               type="button"
               onClick={() => void downloadAll()}
@@ -219,6 +222,7 @@ export function Show() {
             >
               {busy ? 'Queuing...' : 'Download all'}
             </button>
+            )}
             <button
               type="button"
               onClick={() => void toggleFavourite()}

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DATA_DIR, getConfig, loadConfig } from './config.js';
 import { openDb } from './db.js';
 import { createAuth } from './auth.js';
+import { createAccounts } from './accounts.js';
 import { createMultiProvider } from './multiProvider.js';
 import { createDownloadManager } from './downloads.js';
 import { createLibrary } from './library.js';
@@ -17,6 +18,8 @@ import { createMdns } from './mdns.js';
 import { sendRanged } from './stream.js';
 import { lanUrls, registerSystemRoutes, checkWritableDir, VERSION } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerAccountRoutes } from './routes/account.js';
+import { registerAdminRoutes } from './routes/admin.js';
 import { registerBrowseRoutes } from './routes/browse.js';
 import { registerHomeRoutes } from './routes/home.js';
 import { registerDownloadRoutes } from './routes/downloads.js';
@@ -38,11 +41,13 @@ const MOCK = process.env.DRAMABOX_MOCK === '1';
 const MOCK_FLAKY = process.env.DRAMABOX_MOCK_FLAKY === '1';
 const MOCK_BYTES_PER_SEC = 24 * 1024;
 const PUBLIC_API = new Set(['/api/status', '/api/health']);
+const PASSWORD_CHANGE_ALLOWED = new Set(['/api/account', '/api/account/password', '/api/status', '/api/auth/logout']);
 
 const config = loadConfig();
-const db = openDb(DATA_DIR);
+const db = openDb(DATA_DIR, { legacyPasswordHash: config.passwordHash });
 const auth = createAuth(db.raw);
 const events = createEvents();
+const accounts = createAccounts(db, { events });
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
@@ -68,6 +73,7 @@ const ctx = {
   events,
   library,
   auth,
+  accounts,
   profiles,
   progress,
   integrations,
@@ -96,7 +102,13 @@ app.addHook('onRequest', async (req, reply) => {
   const url = req.url.split('?')[0];
   const guarded = url.startsWith('/api/') || url.startsWith('/media/');
   if (!guarded || PUBLIC_API.has(url) || url.startsWith('/api/auth/')) return;
-  if (getConfig().passwordHash && !auth.isAuthenticated(req)) return reply.code(401).send({ error: 'unauthorized' });
+  if (url.startsWith('/api/setup') && !getConfig().configured) return;
+  const account = auth.accountFromRequest(req);
+  if (!account) return reply.code(401).send({ error: 'sign_in_required' });
+  if (account.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(url)) {
+    return reply.code(403).send({ error: 'password_change_required' });
+  }
+  req.account = account;
 });
 
 app.addHook('onRequest', async (req, reply) => {
@@ -108,6 +120,8 @@ app.addHook('onRequest', async (req, reply) => {
 registerSystemRoutes(app, ctx);
 registerHealthRoutes(app, ctx);
 registerAuthRoutes(app, ctx);
+registerAccountRoutes(app, ctx);
+registerAdminRoutes(app, ctx);
 registerProfileRoutes(app, ctx);
 registerProgressRoutes(app, ctx);
 registerIntegrationRoutes(app, ctx);

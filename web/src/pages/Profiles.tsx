@@ -18,7 +18,7 @@ export function Profiles() {
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
   const { status, reload } = useStatus()
-  const canManage = status?.profile?.isAdmin === true
+  const canManage = status?.account != null
   const [manageRequested, setManageRequested] = useState(params.get('manage') === '1')
   const managing = manageRequested && canManage
 
@@ -261,7 +261,6 @@ function ProfileForm({
   const existing = editor.mode === 'edit' ? editor.profile : null
   const [name, setName] = useState(existing?.name ?? '')
   const [color, setColor] = useState<string>(existing?.color ?? PROFILE_COLORS[0])
-  const [isAdmin, setIsAdmin] = useState(existing?.isAdmin ?? false)
   const [pin, setPin] = useState('')
   const [pinRemove, setPinRemove] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -282,12 +281,12 @@ function ProfileForm({
     setError(null)
     try {
       if (existing) {
-        const patch: ProfileInput = { name: trimmed, color, isAdmin }
+        const patch: ProfileInput = { name: trimmed, color }
         if (pinRemove) patch.pin = ''
         else if (pin) patch.pin = pin
         await api.updateProfile(existing.id, patch)
       } else {
-        const input: ProfileInput & { name: string } = { name: trimmed, color, isAdmin }
+        const input: ProfileInput & { name: string } = { name: trimmed, color }
         if (pin) input.pin = pin
         await api.createProfile(input)
       }
@@ -377,16 +376,6 @@ function ProfileForm({
             </>
           )}
         </div>
-
-        <label className="flex items-center gap-3 text-sm">
-          <input
-            type="checkbox"
-            checked={isAdmin}
-            onChange={(e) => setIsAdmin(e.target.checked)}
-            className="h-4 w-4 accent-accent"
-          />
-          Administrator (can manage profiles and settings)
-        </label>
 
         {error && (
           <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
