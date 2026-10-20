@@ -319,6 +319,11 @@ export const api = {
   suggest: (q: string) => request<{ items: Suggestion[] }>(`/api/search/suggest?q=${enc(q)}`),
   show: (bookId: string) => request<ShowDetail>(`/api/shows/${enc(bookId)}`),
 
+  favourites: () => request<{ items: Show[] }>('/api/favourites'),
+  addFavourite: (bookId: string) => request<{ ok: true }>(`/api/favourites/${enc(bookId)}`, { method: 'POST' }),
+  removeFavourite: (bookId: string) => request<{ ok: true }>(`/api/favourites/${enc(bookId)}`, { method: 'DELETE' }),
+  isFavourite: (bookId: string) => request<{ favourite: boolean }>(`/api/favourites/${enc(bookId)}`),
+
   downloads: () => request<{ items: DownloadItem[] }>('/api/downloads'),
   enqueue: (bookId: string, episodes?: number[]) =>
     request<{ added: number }>('/api/downloads', {
