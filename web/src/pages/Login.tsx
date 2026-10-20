@@ -37,7 +37,7 @@ export function Login() {
         await reload()
         navigate(next, { replace: true })
       } else {
-        const res = await api.completeSetup({
+        await api.completeSetup({
           downloadRoot: '',
           language: 'en',
           password,
