@@ -26,6 +26,7 @@ import { registerProgressRoutes } from './routes/progress.js';
 import { registerIntegrationRoutes } from './routes/integrations.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerSourceRoutes } from './routes/sources.js';
+import { registerFavouriteRoutes } from './routes/favourites.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = path.resolve(HERE, '..', '..', 'web', 'dist');
@@ -113,6 +114,7 @@ registerBrowseRoutes(app, ctx);
 registerHomeRoutes(app, ctx);
 registerDownloadRoutes(app, ctx);
 registerLibraryRoutes(app, ctx);
+registerFavouriteRoutes(app, ctx);
 app.get('/api/events', (req, reply) => {
   events.subscribe(req, reply);
 });
