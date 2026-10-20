@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS shows (
   playCount TEXT NOT NULL DEFAULT '',
   tags TEXT NOT NULL DEFAULT '[]',
   status TEXT,
-  updatedAt TEXT NOT NULL
+  updatedAt TEXT NOT NULL,
+  sourceId TEXT
 );
 CREATE TABLE IF NOT EXISTS downloads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +73,9 @@ const ADDED_COLUMNS = {
     nextAttemptAt: 'INTEGER',
     cleared: 'INTEGER NOT NULL DEFAULT 0',
   },
+  shows: {
+    sourceId: 'TEXT',
+  },
 };
 
 function ensureColumns(raw) {
@@ -84,8 +88,8 @@ function ensureColumns(raw) {
 }
 
 const UPSERT_SHOW = `
-INSERT INTO shows (bookId, name, cover, introduction, episodeCount, playCount, tags, status, updatedAt)
-VALUES (@bookId, @name, @cover, @introduction, @episodeCount, @playCount, @tags, @status, @updatedAt)
+INSERT INTO shows (bookId, name, cover, introduction, episodeCount, playCount, tags, status, updatedAt, sourceId)
+VALUES (@bookId, @name, @cover, @introduction, @episodeCount, @playCount, @tags, @status, @updatedAt, @sourceId)
 ON CONFLICT(bookId) DO UPDATE SET
   name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE shows.name END,
   cover = CASE WHEN excluded.cover <> '' THEN excluded.cover ELSE shows.cover END,
@@ -94,7 +98,8 @@ ON CONFLICT(bookId) DO UPDATE SET
   playCount = CASE WHEN excluded.playCount <> '' THEN excluded.playCount ELSE shows.playCount END,
   tags = CASE WHEN excluded.tags <> '[]' THEN excluded.tags ELSE shows.tags END,
   status = COALESCE(excluded.status, shows.status),
-  updatedAt = excluded.updatedAt
+  updatedAt = excluded.updatedAt,
+  sourceId = COALESCE(excluded.sourceId, shows.sourceId)
 `;
 
 export function toShow(row) {
@@ -107,6 +112,7 @@ export function toShow(row) {
     playCount: row.playCount,
     tags: JSON.parse(row.tags || '[]'),
     status: row.status ?? null,
+    source: row.sourceId ?? null,
   };
 }
 
@@ -123,6 +129,7 @@ export function openDb(dataDir) {
 
   const upsert = raw.prepare(UPSERT_SHOW);
   const getShowStmt = raw.prepare('SELECT * FROM shows WHERE bookId = ?');
+  const showsBySourceStmt = raw.prepare('SELECT * FROM shows WHERE sourceId = ? ORDER BY updatedAt DESC LIMIT ?');
 
   const upsertShows = raw.transaction((items) => {
     const updatedAt = new Date().toISOString();
@@ -138,6 +145,7 @@ export function openDb(dataDir) {
         tags: JSON.stringify(s.tags || []),
         status: s.status || null,
         updatedAt,
+        sourceId: s.source || null,
       });
     }
   });
@@ -148,6 +156,9 @@ export function openDb(dataDir) {
     getShow(bookId) {
       const row = getShowStmt.get(String(bookId));
       return row ? toShow(row) : null;
+    },
+    showsBySource(sourceId, limit = 500) {
+      return showsBySourceStmt.all(String(sourceId), limit).map(toShow);
     },
   };
 }

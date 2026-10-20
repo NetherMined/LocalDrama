@@ -16,3 +16,12 @@ export function normalizeShow(raw = {}) {
     status: raw.status ? String(raw.status) : null,
   };
 }
+
+const COUNT_MULTIPLIERS = { K: 1e3, M: 1e6, B: 1e9 };
+
+export function parseCount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const m = String(value ?? '').trim().replace(/,/g, '').match(/^(\d+(?:\.\d+)?)\s*([KMB])?/i);
+  if (!m) return 0;
+  return Math.round(Number(m[1]) * (COUNT_MULTIPLIERS[(m[2] || '').toUpperCase()] || 1));
+}

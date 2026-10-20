@@ -51,6 +51,7 @@ const provider = createMultiProvider({
   port: PORT,
   language: config.language,
   requestDelay: config.requestDelay,
+  resolveShowSource: (bookId) => db.getShow(bookId)?.source || null,
 });
 const profiles = createProfiles(db);
 const progress = createProgress({ db });
