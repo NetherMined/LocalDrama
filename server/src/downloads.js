@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { httpError } from './errors.js';
-import { sanitizeSegment } from './paths.js';
+import { isWindowsPath, sanitizeSegment } from './paths.js';
 
 export { sanitizeSegment };
 
@@ -31,6 +31,27 @@ function pauseError() {
   const err = new Error('Download paused');
   err.name = 'AbortError';
   return err;
+}
+
+const PERMANENT_FS_CODES = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'ENOTDIR']);
+
+// Filesystem failures are not worth four retries and produce cryptic messages on their own.
+function describeFsError(err, root) {
+  if (!err?.code || !PERMANENT_FS_CODES.has(err.code)) return null;
+  const target = err.path || root;
+  if (err.code === 'ENOSPC') return `Cannot write to "${target}": the disk is full.`;
+  if (err.code === 'EROFS') return `Cannot write to "${target}": the folder is read-only.`;
+  if (err.code === 'ENOTDIR') return `Cannot write to "${target}": part of the path is not a folder.`;
+  return `Cannot write to "${target}" (permission denied). If LocalDrama runs in Docker, the download folder must be a path inside the container — use /media in Settings → Storage.`;
+}
+
+function checkDownloadRoot(root) {
+  if (!root) throw permanentError('Download folder is not configured');
+  if (process.platform !== 'win32' && isWindowsPath(root)) {
+    throw permanentError(
+      `Download folder "${root}" is a Windows path, but LocalDrama is running in Linux (for example in Docker). Set the download folder to /media in Settings → Storage.`,
+    );
+  }
 }
 
 // fetch (undici) ignores Node agents, so MP4s use https.get; the proxy patch in proxy.js routes dramaboxdb hosts.
@@ -217,7 +238,7 @@ export function createDownloadManager({ db, provider, events, getConfig, library
 
   async function download(row, signal) {
     const cfg = getConfig();
-    if (!cfg.downloadRoot) throw permanentError('Download folder is not configured');
+    checkDownloadRoot(cfg.downloadRoot);
     const dest = destFor(row, cfg.downloadRoot);
     await library.writeSidecars(row.bookId, path.dirname(dest), row.showName);
 
@@ -233,6 +254,8 @@ export function createDownloadManager({ db, provider, events, getConfig, library
         const size = await streamToFile(url, dest, row, signal);
         return { filePath: dest, size };
       } catch (err) {
+        const fsMessage = describeFsError(err, cfg.downloadRoot);
+        if (fsMessage) throw permanentError(fsMessage);
         lastErr = err;
         if (!err.expired || signal.aborted) break;
       }

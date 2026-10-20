@@ -57,7 +57,7 @@ export function registerBrowseRoutes(app, ctx) {
   app.get('/api/shows/:bookId/stream/:index', async (req) => {
     const bookId = String(req.params.bookId);
     const index = Number(req.params.index);
-    if (!Number.isInteger(index) || index < 1) throw httpError(400, 'Invalid episode index');
+    if (!Number.isInteger(index) || index < 0) throw httpError(400, 'Invalid episode index');
     const url = await provider.streamUrl(bookId, index);
     return { url };
   });

@@ -10,6 +10,7 @@ import { httpError } from '../errors.js';
 import { buildAgent, getProxyUrl, maskProxyUrl, parseProxyUrl, setProxy } from '../proxy.js';
 import { hashPassword } from '../auth.js';
 import { maskSecret, normalizeUrl, resolveSecret } from '../integrations.js';
+import { isWindowsPath } from '../paths.js';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'));
 export const VERSION = pkg.version;
@@ -45,6 +46,13 @@ export function lanUrls(port) {
 export async function checkWritableDir(input) {
   const str = typeof input === 'string' ? input.trim() : '';
   if (!str) return { ok: false, error: 'Enter a folder path', resolved: '' };
+  if (process.platform !== 'win32' && isWindowsPath(str)) {
+    return {
+      ok: false,
+      error: 'This is a Windows path, but the server is running in Linux (for example in Docker). Use a path inside the container, such as /media.',
+      resolved: str,
+    };
+  }
   const resolved = path.resolve(str);
   try {
     await fs.promises.mkdir(resolved, { recursive: true });

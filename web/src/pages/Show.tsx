@@ -35,7 +35,10 @@ export function Show() {
     api
       .show(bookId)
       .then((res) => {
-        if (!cancelled) setDetail(res)
+        if (cancelled) return
+        setDetail(res)
+        // Asking for a show that has no completed episodes returns 404; skip the needless request.
+        if (res.episodes.some((ep) => ep.downloaded)) loadLibrary()
       })
       .catch((err) => {
         if (!cancelled) setError(errorMessage(err))
@@ -43,7 +46,6 @@ export function Show() {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
-    loadLibrary()
     return () => {
       cancelled = true
     }

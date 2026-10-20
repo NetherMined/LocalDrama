@@ -15,7 +15,7 @@ import { createProgress } from './progress.js';
 import { createIntegrations } from './integrations.js';
 import { createMdns } from './mdns.js';
 import { sendRanged } from './stream.js';
-import { lanUrls, registerSystemRoutes, VERSION } from './routes/system.js';
+import { lanUrls, registerSystemRoutes, checkWritableDir, VERSION } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerBrowseRoutes } from './routes/browse.js';
 import { registerHomeRoutes } from './routes/home.js';
@@ -142,6 +142,10 @@ app.setNotFoundHandler((req, reply) => {
 });
 
 if (getConfig().configured) {
+  if (getConfig().downloadRoot) {
+    const check = await checkWritableDir(getConfig().downloadRoot);
+    if (!check.ok) app.log.error(`Download folder is not writable: ${check.error}`);
+  }
   try {
     const scanned = await library.scan();
     app.log.info(`Library scan: ${scanned.added} added, ${scanned.removed} removed`);

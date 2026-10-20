@@ -20,3 +20,16 @@ export function maskProxyUrl() {
 export function installHttpsPatch() {
   // no-op
 }
+
+// Still imported by library.js (poster fetch) and routes/system.js (test-proxy); nothing is proxied any more.
+export async function buildAgent() {
+  return undefined;
+}
+
+export function getAgent() {
+  return undefined;
+}
+
+export function isProxiedHost() {
+  return false;
+}

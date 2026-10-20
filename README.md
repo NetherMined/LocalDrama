@@ -555,6 +555,16 @@ node -e "const D=require('better-sqlite3');new D('../data/library.db').prepare('
 </details>
 
 <details>
+<summary><b>Downloads fail with "permission denied" (EACCES)</b></summary>
+
+The download folder must exist and be writable **where the server runs**. Inside Docker that means a path in the container, not a Windows path from the host.
+
+- Open **Settings → Storage** and set the folder to `/media` (the container path), then save.
+- `/media` is mapped to the host folder set by `MEDIA_DIR` in `.env` (default `./media`).
+- Retry the failed downloads afterwards.
+</details>
+
+<details>
 <summary><b>The video doesn't play</b></summary>
 
 - Wait until the episode shows as *Completed*; unfinished `.part` files don't play.
