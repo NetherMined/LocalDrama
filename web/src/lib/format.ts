@@ -84,3 +84,7 @@ export function fmtDate(iso: string): string {
 export function fmtAgoOrNever(iso: string | null): string {
   return iso ? fmtAgo(iso) : 'Never'
 }
+
+export function isGenericEpisodeName(name: string): boolean {
+  return !name.trim() || /^(episode|ep|e)[\s.]*\d+$/i.test(name.trim())
+}

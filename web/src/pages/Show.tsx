@@ -3,17 +3,26 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail, type StreamProgress } from '../api'
 import { useDownloads } from '../downloads'
 import { useStatus } from '../status'
+import { PlayerShell, type PlayerEpisode, type PlayerHandle, type PlayerSample, type ResolvedSource } from '../components/PlayerShell'
 import { StatusPill } from '../components/StatusPill'
-import { CheckIcon } from '../components/icons'
+import { CheckIcon, PlayIcon } from '../components/icons'
 import { Poster, LoadError, buttonClass } from '../components/ui'
-import { VideoPlayer, type PlayerSample } from '../components/VideoPlayer'
-import { errorMessage, fmtEpisode } from '../lib/format'
+import { errorMessage, fmtEpisode, fmtMinutesLeft, isGenericEpisodeName } from '../lib/format'
 
 type Display = 'none' | DownloadStatus | 'downloaded'
 
+interface DisplayInfo {
+  state: Display
+  bytesDone?: number
+  bytesTotal?: number
+  id?: number | string
+}
+
+const RESUME_MIN_SECONDS = 5
+
 export function Show() {
   const { bookId = '' } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const source = searchParams.get('source') || undefined
   const { byEpisode } = useDownloads()
   const isAdmin = useStatus().status?.account?.role === 'admin'
@@ -24,11 +33,13 @@ export function Show() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const [watching, setWatching] = useState<{ index: number; url: string; hls: boolean; startAt: number } | null>(null)
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
   const [progressByEp, setProgressByEp] = useState<Map<number, StreamProgress>>(() => new Map())
   const [progressReady, setProgressReady] = useState(false)
+  const [currentKey, setCurrentKey] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const playerRef = useRef<PlayerHandle>(null)
   const epParam = searchParams.get('ep')
   const autoOpened = useRef<string | null>(null)
   const currentBook = useRef(bookId)
@@ -46,9 +57,9 @@ export function Show() {
     setLoading(true)
     setError(null)
     setNotice(null)
-    setWatching(null)
     setProgressByEp(new Map())
     setProgressReady(false)
+    setCurrentKey(null)
     api
       .watchProgress(bookId)
       .then((res) => {
@@ -81,7 +92,7 @@ export function Show() {
     if (event.type === 'library' && event.bookId === bookId) loadLibrary()
   })
 
-  function displayOf(ep: Episode): { state: Display; bytesDone?: number; bytesTotal?: number; id?: number | string } {
+  function displayOf(ep: Episode): DisplayInfo {
     const live = byEpisode(bookId, ep.index)
     if (libraryIds.has(ep.index) || live?.status === 'completed') {
       return { state: 'downloaded', id: libraryIds.get(ep.index) }
@@ -135,37 +146,53 @@ export function Show() {
   // Resumes an unfinished episode from where it was left; a few seconds in is not worth resuming.
   function resumeAt(index: number): number {
     const p = progressByEp.get(index)
-    return p && !p.completed && p.position > 5 ? p.position : 0
+    return p && !p.completed && p.position > RESUME_MIN_SECONDS ? p.position : 0
   }
 
-  async function watchEpisode(index: number) {
-    setNotice(null)
-    try {
-      const query = source ? `?source=${encodeURIComponent(source)}` : ''
-      const res = await fetch(`/api/shows/${encodeURIComponent(bookId)}/stream/${index}${query}`)
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || `Failed to get stream (${res.status})`)
-      }
-      const { url, hls } = await res.json()
-      if (!url) throw new Error('No stream URL returned')
-      setWatching({ index, url, hls: !!hls, startAt: resumeAt(index) })
-    } catch (err) {
-      setNotice({ kind: 'err', text: errorMessage(err) })
+  async function resolveStream(key: string): Promise<ResolvedSource> {
+    const index = Number(key)
+    const query = source ? `?source=${encodeURIComponent(source)}` : ''
+    const res = await fetch(`/api/shows/${encodeURIComponent(bookId)}/stream/${index}${query}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `Failed to get stream (${res.status})`)
     }
+    const { url, hls } = await res.json()
+    if (!url) throw new Error('No stream URL returned')
+    return { src: url, hls: !!hls, startAt: resumeAt(index) }
   }
 
-  // Deep link from Continue Watching: /show/<id>?ep=<index> opens that episode once its progress is known.
-  useEffect(() => {
-    if (epParam === null || loading || !progressReady || !detail) return
-    const key = `${bookId}:${epParam}`
-    if (autoOpened.current === key) return
-    autoOpened.current = key
-    const index = Number(epParam)
-    if (!Number.isInteger(index) || !detail.episodes.some((ep) => ep.index === index)) return
-    void watchEpisode(index)
-    // watchEpisode reads the progress map of the render that triggered this effect.
-  }, [bookId, epParam, loading, progressReady, detail])
+  // Must be called from a click handler (or the deep link effect for inline play) so the player can go fullscreen.
+  function playEpisode(index: number, fullscreen = true) {
+    const key = String(index)
+    setCurrentKey(key)
+    playerRef.current?.play(key, { fullscreen })
+  }
+
+  function onPlayerChange(key: string) {
+    setCurrentKey(key)
+    autoOpened.current = `${bookId}:${key}`
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('ep', key)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function onPlayerClose() {
+    if (!searchParams.has('ep')) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('ep')
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const saveWatch = useCallback(
     (index: number, sample: PlayerSample, beacon: boolean) => {
@@ -184,6 +211,18 @@ export function Show() {
     },
     [bookId, source],
   )
+
+  // Deep link from Continue Watching: /show/<id>?ep=<index> plays that episode inline once its progress is known.
+  useEffect(() => {
+    if (epParam === null || loading || !progressReady || !detail) return
+    const key = `${bookId}:${epParam}`
+    if (autoOpened.current === key) return
+    autoOpened.current = key
+    const index = Number(epParam)
+    if (!Number.isInteger(index) || !detail.episodes.some((ep) => ep.index === index)) return
+    playEpisode(index, false)
+    // playEpisode reads the progress map of the render that triggered this effect.
+  }, [bookId, epParam, loading, progressReady, detail])
 
   if (loading) {
     return (
@@ -211,95 +250,133 @@ export function Show() {
 
   const show = detail?.show ?? null
   const title = show?.name ?? bookId
+  const playerEpisodes: PlayerEpisode[] = episodes.map((ep) => ({
+    key: String(ep.index),
+    index: ep.index,
+    title: isGenericEpisodeName(ep.name) ? '' : ep.name,
+  }))
+
+  const progressList = [...progressByEp.values()].sort((a, b) => a.episodeIndex - b.episodeIndex)
+  const resumeItem = progressList.filter((p) => !p.completed && p.position > RESUME_MIN_SECONDS).at(-1)
+  const doneItem = progressList.filter((p) => p.completed).at(-1)
+  const afterDone =
+    doneItem && episodes.some((ep) => ep.index === doneItem.episodeIndex + 1) ? doneItem.episodeIndex + 1 : null
+  const firstIndex = episodes[0]?.index ?? 0
+  let primary: { index: number; label: string }
+  if (resumeItem) {
+    const left = resumeItem.duration > 0 ? ` · ${fmtMinutesLeft(resumeItem.position, resumeItem.duration)}` : ''
+    primary = { index: resumeItem.episodeIndex, label: `Resume ${fmtEpisode(resumeItem.episodeIndex)}${left}` }
+  } else if (afterDone !== null) {
+    primary = { index: afterDone, label: `Play ${fmtEpisode(afterDone)}` }
+  } else {
+    primary = { index: firstIndex, label: `Play ${fmtEpisode(firstIndex)}` }
+  }
+
+  const meta = [
+    ...(show?.tags ?? []).slice(0, 4),
+    `${episodes.length || show?.episodeCount || 0} episodes`,
+    show?.sourceName,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="space-y-8">
       <BackLink />
 
-      {watching && (
-        <div className="overflow-hidden rounded-lg bg-black shadow-2xl">
-          <VideoPlayer
-            key={watching.url}
-            src={watching.url}
-            hls={watching.hls}
-            poster={show?.cover}
-            startAt={watching.startAt}
-            onSave={(sample, beacon) => saveWatch(watching.index, sample, beacon)}
-          />
-          <div className="flex items-center justify-between bg-ink px-4 py-2 text-sm">
-            <span>Episode {watching.index}</span>
-            <button type="button" onClick={() => setWatching(null)} className={buttonClass('ghost')}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      <PlayerShell
+        key={`${bookId}:${source ?? ''}`}
+        ref={playerRef}
+        episodes={playerEpisodes}
+        resolve={resolveStream}
+        onSave={(key, sample, beacon) => saveWatch(Number(key), sample, beacon)}
+        onChange={onPlayerChange}
+        onClose={onPlayerClose}
+        showTitle={title}
+        poster={show?.cover}
+      />
 
-      <section className="flex flex-col gap-6 sm:flex-row sm:gap-8">
-        <div className="w-40 shrink-0 sm:w-56">
-          <Poster src={show?.cover} name={title} className="rounded-md shadow-2xl shadow-black/60" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl leading-tight font-extrabold tracking-tight sm:text-4xl">{title}</h1>
-          {!show && (
-            <p className="mt-2 text-sm text-amber-300">Details are not cached for this drama. Episodes are shown below.</p>
-          )}
-          {show?.tags && show.tags.length > 0 && (
-            <ul className="mt-3 flex flex-wrap gap-2" aria-label="Tags">
-              {show.tags.map((tag) => (
-                <li key={tag} className="rounded-full border border-line bg-panel px-3 py-1 text-xs text-white/80">
-                  {tag}
-                </li>
-              ))}
-            </ul>
-          )}
-          <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {show && (
-              <div>
-                <dt className="inline text-muted">Plays </dt>
-                <dd className="inline font-semibold">{show.playCount.toLocaleString()}</dd>
+      <section aria-label="Drama details" className="relative isolate overflow-hidden rounded-xl border border-line bg-panel">
+        {show?.cover && (
+          <img
+            src={show.cover}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 -z-10 h-full w-full scale-110 object-cover object-top opacity-40 blur-2xl"
+          />
+        )}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black via-black/80 to-black/50" />
+        <div className="flex flex-col gap-6 p-4 sm:p-6 md:flex-row md:gap-8 lg:p-10">
+          <div className="hidden w-48 shrink-0 md:block lg:w-56">
+            <Poster src={show?.cover} name={title} className="rounded-md shadow-2xl shadow-black/60" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-4">
+            <h1 className="text-3xl leading-tight font-black tracking-tight break-words sm:text-4xl md:text-5xl">
+              {title}
+            </h1>
+            {meta && <p className="text-sm font-medium text-muted">{meta}</p>}
+            {!show && (
+              <p className="text-sm text-amber-300">Details are not cached for this drama. Episodes are shown below.</p>
+            )}
+            {show?.introduction && (
+              <div className="max-w-3xl">
+                <p
+                  className={`text-sm leading-relaxed text-white/80 sm:text-base ${expanded ? '' : 'line-clamp-3'}`}
+                >
+                  {show.introduction}
+                </p>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => setExpanded((v) => !v)}
+                  className="mt-1 text-sm font-semibold text-rose-300 hover:text-rose-200"
+                >
+                  {expanded ? 'Less' : 'More'}
+                </button>
               </div>
             )}
-            <div>
-              <dt className="inline text-muted">Episodes </dt>
-              <dd className="inline font-semibold">{episodes.length || show?.episodeCount || 0}</dd>
+            <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                onClick={() => playEpisode(primary.index)}
+                disabled={episodes.length === 0}
+                className={`${buttonClass()} w-full sm:w-auto`}
+              >
+                <PlayIcon className="h-4 w-4" />
+                {primary.label}
+              </button>
+              <button
+                type="button"
+                onClick={() => void toggleFavourite()}
+                disabled={favBusy}
+                className={`${buttonClass('ghost')} w-full sm:w-auto`}
+              >
+                {isFav ? 'Remove from Favourites' : 'Add to Favourites'}
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => void downloadAll()}
+                  disabled={busy || selectable.length === 0}
+                  className={`${buttonClass('ghost')} w-full sm:w-auto`}
+                >
+                  {busy ? 'Queuing...' : 'Download all'}
+                </button>
+              )}
             </div>
-          </dl>
-          {show?.introduction && (
-            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-white/80">{show.introduction}</p>
-          )}
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            {isAdmin && (
-            <button
-              type="button"
-              onClick={() => void downloadAll()}
-              disabled={busy || selectable.length === 0}
-              className={buttonClass()}
-            >
-              {busy ? 'Queuing...' : 'Download all'}
-            </button>
+            {notice && (
+              <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
+                {notice.text}
+              </p>
             )}
-            <button
-              type="button"
-              onClick={() => void toggleFavourite()}
-              disabled={favBusy}
-              className={buttonClass('ghost')}
-            >
-              {isFav ? 'Remove from Favourites' : 'Add to Favourites'}
-            </button>
           </div>
-          {notice && (
-            <p role="status" className={`mt-3 text-sm ${notice.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
-              {notice.text}
-            </p>
-          )}
         </div>
       </section>
 
       <section aria-labelledby="episodes-heading">
-        <h2 id="episodes-heading" className="mb-3 text-lg font-semibold">
+        <h2 id="episodes-heading" className="mb-3 flex items-baseline gap-2 text-lg font-semibold">
           Episodes
+          <span className="text-sm font-normal text-muted">{episodes.length}</span>
         </h2>
 
         {episodes.length === 0 ? (
@@ -307,58 +384,99 @@ export function Show() {
             No episodes were returned for this drama.
           </p>
         ) : (
-          <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel">
-            {episodes.map((ep) => {
-              const d = displayOf(ep)
-              const p = progressByEp.get(ep.index)
-              const percent = p && p.duration > 0 ? Math.min(100, Math.round((p.position / p.duration) * 100)) : 0
-              return (
-                <li key={ep.index} className="relative flex items-center gap-3 px-3 py-3 sm:px-4">
-                  <span className="w-10 shrink-0 font-mono text-xs text-muted">{fmtEpisode(ep.index)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm">{ep.name || `Episode ${ep.index + 1}`}</span>
-                  {p?.completed && (
-                    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-300">
-                      <CheckIcon className="h-3.5 w-3.5" />
-                      Watched
-                    </span>
-                  )}
-                  {d.state !== 'none' && (
-                    <StatusPill status={d.state} bytesDone={d.bytesDone} bytesTotal={d.bytesTotal} />
-                  )}
-                  {p && !p.completed && percent > 0 && (
-                    <div
-                      role="progressbar"
-                      aria-label={`${fmtEpisode(ep.index)} progress`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={percent}
-                      className="absolute inset-x-0 bottom-0 h-0.5 bg-white/10"
-                    >
-                      <div className="h-full bg-accent-hi" style={{ width: `${percent}%` }} />
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void watchEpisode(ep.index)}
-                    className={buttonClass('ghost')}
-                  >
-                    Watch
-                  </button>
-                  {d.state === 'downloaded' && d.id !== undefined && (
-                    <Link
-                      to={`/watch/${encodeURIComponent(bookId)}/${encodeURIComponent(String(d.id))}`}
-                      className={buttonClass('ghost')}
-                    >
-                      Play local
-                    </Link>
-                  )}
-                </li>
-              )
-            })}
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {episodes.map((ep) => (
+              <EpisodeTile
+                key={ep.index}
+                bookId={bookId}
+                ep={ep}
+                display={displayOf(ep)}
+                progress={progressByEp.get(ep.index)}
+                current={currentKey === String(ep.index)}
+                onPlay={() => playEpisode(ep.index)}
+              />
+            ))}
           </ul>
         )}
       </section>
     </div>
+  )
+}
+
+function EpisodeTile({
+  bookId,
+  ep,
+  display,
+  progress,
+  current,
+  onPlay,
+}: {
+  bookId: string
+  ep: Episode
+  display: DisplayInfo
+  progress: StreamProgress | undefined
+  current: boolean
+  onPlay: () => void
+}) {
+  const percent =
+    progress && progress.duration > 0 ? Math.min(100, Math.round((progress.position / progress.duration) * 100)) : 0
+  const showBar = !!progress && !progress.completed && percent > 0
+  const title = isGenericEpisodeName(ep.name) ? '' : ep.name
+  const localHref =
+    display.state === 'downloaded' && display.id !== undefined
+      ? `/watch/${encodeURIComponent(bookId)}/${encodeURIComponent(String(display.id))}`
+      : null
+
+  return (
+    <li className="relative">
+      <button
+        type="button"
+        onClick={onPlay}
+        aria-current={current || undefined}
+        className={`flex min-h-[44px] w-full flex-col items-start gap-1.5 rounded-lg border bg-panel p-3 text-left transition hover:bg-panel-2 ${
+          current ? 'border-accent-hi' : 'border-line'
+        }`}
+      >
+        <span className="font-mono text-xs text-muted">{fmtEpisode(ep.index)}</span>
+        {title && <span className="line-clamp-2 text-sm leading-snug font-medium">{title}</span>}
+        <span className="mt-auto flex flex-wrap items-center gap-2 pt-1 text-xs">
+          {progress?.completed && (
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-300">
+              <CheckIcon className="h-3.5 w-3.5" />
+              Watched
+            </span>
+          )}
+          {display.state !== 'none' && display.state !== 'downloaded' && (
+            <StatusPill status={display.state} bytesDone={display.bytesDone} bytesTotal={display.bytesTotal} />
+          )}
+        </span>
+        {showBar && (
+          <span
+            role="progressbar"
+            aria-label={`${fmtEpisode(ep.index)} progress`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            className="block h-1 w-full overflow-hidden rounded bg-white/10"
+          >
+            <span className="block h-full bg-accent-hi" style={{ width: `${percent}%` }} />
+          </span>
+        )}
+      </button>
+      {display.state === 'downloaded' &&
+        (localHref ? (
+          <Link
+            to={localHref}
+            className="absolute top-2 right-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-emerald-300 hover:bg-emerald-500/25"
+          >
+            Downloaded
+          </Link>
+        ) : (
+          <span className="absolute top-2 right-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-emerald-300">
+            Downloaded
+          </span>
+        ))}
+    </li>
   )
 }
 

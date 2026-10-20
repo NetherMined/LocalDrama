@@ -140,3 +140,45 @@ export function UserIcon({ className = 'h-5 w-5' }: IconProps) {
     </svg>
   )
 }
+
+export function CloseIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  )
+}
+
+export function FullscreenIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+    </svg>
+  )
+}
+
+export function ExitFullscreenIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+    </svg>
+  )
+}
+
+export function SkipBackIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M18 5 9 12l9 7V5z" />
+      <path d="M6 5v14" />
+    </svg>
+  )
+}
+
+export function SkipForwardIcon({ className = 'h-5 w-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M6 5l9 7-9 7V5z" />
+      <path d="M18 5v14" />
+    </svg>
+  )
+}

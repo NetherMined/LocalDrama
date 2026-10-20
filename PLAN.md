@@ -379,3 +379,77 @@ Each phase stops for confirmation before the next.
 3. Build, rebuild container, screenshot checks, commit.
 
 Each phase stops for confirmation before the next.
+
+---
+
+# Ticket: Predictive search + installable app (2026-10-20)
+
+## Findings
+- Search and suggestions only query the **active** platform's upstream search (`provider.search` → NetShort).
+  NetShort's search matches few titles: "love" works; "ceo", "revenge", "he broke" return nothing, though the
+  local `shows` cache (~500 shows across 10 platforms) holds 22 "ceo" and 66 "revenge" matches, and
+  "He Broke the Heart That Saved Him" is a DramaBox show that is never searched.
+- No web manifest, no PNG icons, no service worker. The server is plain http (`http://192.168.1.111:8096`);
+  browsers only offer "Install app" over HTTPS (iOS "Add to Home Screen" works over http).
+- Smart TVs (Tizen, webOS, Google TV) can't install web apps; a bookmark is the realistic option there.
+- Decision (user): HTTPS via **Tailscale** (`tailscale serve`). Tailscale is not installed on this PC yet.
+
+- Player (added): streamed playback on the series page uses `VideoPlayer`, which has **no Up Next overlay and
+  no autoplay-next**; those exist only in the downloads player (`Watch.tsx`). `Watch.tsx` requests fullscreen
+  from `onLoadedMetadata` (not a user gesture), so browsers reject it; iOS needs `video.webkitEnterFullscreen`.
+  The series page has no main Play/Resume button, and the inline player label is 0-based ("Episode 0").
+
+## Phase 1: Player and series page
+1. One shared `PlayerShell` used by the series page (streams) and Watch (downloads): a container element that
+   owns fullscreen, the `<video>` (HLS-aware), and overlays. Switching episodes swaps the source inside the
+   same container, so fullscreen and the overlay survive.
+2. **Fullscreen on click**: Play/episode buttons call `container.requestFullscreen()` inside the click handler
+   (iOS: `video.webkitEnterFullscreen()`), then `screen.orientation.lock('landscape')` where supported. Exit
+   via Esc / button / system gesture; leaving fullscreen keeps playback inline.
+3. **Up Next overlay**: in the last 10 s (or on `ended` when the duration is unknown) show a card with next
+   episode title, countdown ring, "Play now" and "Cancel"; also a "Next episode" button in the top bar
+   while playing. Works for streams (next index from the episode list; stream URL fetched ahead at -15 s)
+   and downloads.
+4. **Autoplay next**: on end (unless cancelled) load the next episode in place, resume progress saving, and
+   update the URL (`?ep=`); stop at the last episode with a "Series finished" card. Setting: autoplay on/off
+   (per browser).
+5. Top bar overlay: back, show title, "E05 · Episode name", next/prev; auto-hides after 3 s idle; keyboard:
+   space/k play-pause, f fullscreen, n next, ←/→ seek 10 s.
+6. **Series page**: hero with backdrop, big **Play** (first episode) / **Resume E05 · 12 min left** button that
+   opens the player fullscreen, episode count + platform, favourite + download (admin) buttons; episode list
+   as a responsive grid with progress bars; 1-based labels everywhere.
+
+## Phase 2: Search that actually finds things
+1. Server: SQLite FTS5 index `shows_fts(name, tags, introduction)` kept in sync on `upsertShows` (triggers),
+   backfilled on start. Prefix matching per word (`he* bro*`), name weighted above tags/intro (bm25).
+2. `GET /api/search/suggest?q=` → local index only (instant, < 20 ms): top 8 `{bookId, name, cover, source,
+   sourceName, tags}`; plus up to 3 matching tag names ("Revenge") as category suggestions.
+3. `GET /api/search?q=&source=&page=` → fan out to every enabled platform's upstream search in parallel
+   (concurrency 4, 8 s timeout each, failures ignored) + local index; merge, dedupe by source:bookId, rank
+   local-name matches first; results upserted so the index grows. `source=` narrows to one platform.
+4. Web SearchBox: dropdown with cover thumbnails, platform badge, highlighted match, category chips, "Search
+   for “q”" row; ↑/↓/Enter/Escape, combobox ARIA (`aria-activedescendant`); 150 ms debounce; ignore stale
+   responses. Search page: platform filter chips with counts, landscape grid.
+
+## Phase 3: Installable app + mobile pass
+1. `web/public/manifest.webmanifest` (name DramaUs, standalone, black theme, start_url `/`), PNG icons
+   192/512 + maskable 512 + apple-touch-icon 180 (rendered from the existing red play logo), favicon set.
+2. Minimal service worker (cache-first for built assets, network-only for `/api` and `/media`, offline page).
+3. "Install app" item in the avatar menu + a dismissible banner on first mobile visit:
+   - Chrome/Edge (HTTPS): native prompt via `beforeinstallprompt`.
+   - iPhone/iPad: illustrated steps (Share → Add to Home Screen).
+   - Android over http / TVs: steps to add a home-screen shortcut / browser bookmark, with a QR code of the
+     server URL for opening it on a phone or TV quickly.
+   - Hidden once running standalone.
+4. **Mobile pass**: screenshot every page at 360 / 390 / 768 px (Home, Browse, Search, Series, player,
+   Library, Downloads, Favourites, Account, Profiles, Settings, Users, User detail, Login) and fix overflow,
+   tap-target sizes (≥ 44 px), sticky bars, and the nav (collapse the link row into a bottom tab bar on phones).
+
+## Phase 4: HTTPS with Tailscale
+1. **User:** install Tailscale on this PC and sign in; in the Tailscale admin console enable MagicDNS and
+   HTTPS certificates; install Tailscale on phones/TVs that should use the app.
+2. Claude: `tailscale serve --bg http://localhost:8096` → `https://<pc>.<tailnet>.ts.net`; mark session/device
+   cookies `Secure` when the request came over HTTPS; show the HTTPS address in Settings and in the install
+   dialog's QR code; verify Chrome's install prompt appears.
+
+Each phase stops for confirmation before the next.
