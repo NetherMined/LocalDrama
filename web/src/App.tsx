@@ -92,7 +92,7 @@ export default function App() {
     <DownloadsProvider>
       <Nav />
       <UpstreamBanner />
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className={location.pathname === '/' ? undefined : 'mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8'}>
         <Routes>
           <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />

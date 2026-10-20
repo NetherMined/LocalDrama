@@ -1,36 +1,41 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useDownloads } from '../downloads'
 import { useStatus } from '../status'
-import { GearIcon, UserIcon } from './icons'
+import { BellIcon, UserIcon } from './icons'
 import { ProfileAvatar } from './ProfileAvatar'
 import { SearchBox } from './SearchBox'
 
-function navClass({ isActive }: { isActive: boolean }) {
-  return `rounded-md px-3 py-2 text-sm font-medium transition ${
-    isActive ? 'text-white' : 'text-muted hover:text-white'
-  }`
-}
-
-function iconLinkClass({ isActive }: { isActive: boolean }) {
-  return `inline-flex h-10 w-10 items-center justify-center rounded-md transition ${
-    isActive ? 'bg-panel-2 text-white' : 'text-muted hover:bg-panel-2 hover:text-white'
-  }`
-}
-
 const menuItemClass =
   'flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-white/90 transition hover:bg-panel-2 hover:text-white focus-visible:bg-panel-2'
+
+interface NavLinkItem {
+  label: string
+  to: string
+  active: boolean
+}
 
 export function Nav() {
   const { status, reload } = useStatus()
   const { activeCount } = useDownloads()
   const navigate = useNavigate()
+  const location = useLocation()
   const isAdmin = status?.profile?.isAdmin === true
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    function onScroll() {
+      setScrolled(window.scrollY > 40)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -73,110 +78,118 @@ export function Nav() {
     await reload()
   }
 
+  const popular = location.pathname === '/browse' && new URLSearchParams(location.search).get('sort') === 'popular'
+  const links: NavLinkItem[] = [
+    { label: 'Home', to: '/', active: location.pathname === '/' },
+    { label: 'Browse', to: '/browse', active: location.pathname === '/browse' && !popular },
+    { label: 'New & Popular', to: '/browse?sort=popular', active: popular },
+    { label: 'My List', to: '/favourites', active: location.pathname === '/favourites' },
+    { label: 'Library', to: '/library', active: location.pathname.startsWith('/library') },
+    { label: 'Downloads', to: '/downloads', active: location.pathname === '/downloads' },
+  ]
+
   return (
-    <header className="sticky top-0 z-40 border-b border-line/60 bg-ink/85 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-        <Link to="/" className="rounded text-xl font-extrabold tracking-tight text-rose-500">
-          LOCALDRAMA
+    <header
+      className={`sticky top-0 z-40 transition-colors duration-300 ${
+        scrolled ? 'bg-black/95 backdrop-blur' : 'bg-gradient-to-b from-black/90 to-black/0'
+      }`}
+    >
+      <div className="flex items-center gap-3 px-4 pt-3 sm:gap-4 sm:px-6 lg:px-10">
+        <Link to="/" className="shrink-0 rounded text-lg font-black tracking-tight text-rose-600 sm:text-xl">
+          DRAMAUS
         </Link>
         {status?.mock && (
-          <span className="rounded border border-amber-400/50 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300">
+          <span className="hidden rounded border border-amber-400/50 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300 sm:inline-block">
             MOCK MODE
           </span>
         )}
-        <nav aria-label="Main" className="flex items-center gap-1">
-          <NavLink to="/" end className={navClass}>
-            Home
-          </NavLink>
-          <NavLink to="/browse" className={navClass}>
-            Browse
-          </NavLink>
-          <NavLink to="/favourites" className={navClass}>
-            My Favourites
-          </NavLink>
-          <NavLink to="/downloads" className={navClass}>
-            Downloads
-            {activeCount > 0 && (
-              <span
-                aria-label={`${activeCount} active`}
-                className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-bold text-white"
-              >
-                {activeCount}
+        <div className="flex min-w-0 flex-1 justify-center">
+          <SearchBox />
+        </div>
+        <Link
+          to="/downloads"
+          aria-label={activeCount > 0 ? `Downloads, ${activeCount} active` : 'Downloads'}
+          title="Downloads"
+          className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10"
+        >
+          <BellIcon />
+          {activeCount > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-rose-600 ring-2 ring-black"
+            />
+          )}
+        </Link>
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            ref={avatarRef}
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={status?.profile ? `Profile: ${status.profile.name}` : 'Profile menu'}
+            title={status?.profile?.name ?? 'Profile'}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full transition hover:ring-2 hover:ring-white/60 focus-visible:ring-2"
+          >
+            {status?.profile ? (
+              <ProfileAvatar name={status.profile.name} color={status.profile.color} className="h-9 w-9 text-sm" />
+            ) : (
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-panel-2 text-muted">
+                <UserIcon />
               </span>
             )}
-          </NavLink>
-          <NavLink to="/library" className={navClass}>
-            Library
-          </NavLink>
-        </nav>
-        <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
-          <div className="min-w-0 flex-1 sm:min-w-64 sm:flex-none">
-            <SearchBox />
-          </div>
-          {isAdmin && (
-            <NavLink to="/settings" aria-label="Settings" title="Settings" className={iconLinkClass}>
-              <GearIcon />
-            </NavLink>
-          )}
-          <div ref={menuRef} className="relative shrink-0">
-            <button
-              ref={avatarRef}
-              type="button"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label={status?.profile ? `Profile: ${status.profile.name}` : 'Profile menu'}
-              title={status?.profile?.name ?? 'Profile'}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full transition hover:ring-2 hover:ring-white/60 focus-visible:ring-2"
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              aria-label="Profile"
+              className="absolute right-0 z-50 mt-2 w-56 space-y-1 rounded-lg border border-line bg-panel p-2 shadow-2xl shadow-black/60"
             >
-              {status?.profile ? (
-                <ProfileAvatar name={status.profile.name} color={status.profile.color} className="h-9 w-9 text-sm" />
-              ) : (
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-panel-2 text-muted">
-                  <UserIcon />
-                </span>
+              {status?.profile && (
+                <p className="truncate px-3 py-2 text-xs text-muted">
+                  Signed in as <span className="font-semibold text-white">{status.profile.name}</span>
+                </p>
               )}
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                aria-label="Profile"
-                className="absolute right-0 z-50 mt-2 w-56 space-y-1 rounded-lg border border-line bg-panel p-2 shadow-2xl shadow-black/60"
-              >
-                {status?.profile && (
-                  <p className="truncate px-3 py-2 text-xs text-muted">
-                    Signed in as <span className="font-semibold text-white">{status.profile.name}</span>
-                  </p>
-                )}
-                <button type="button" role="menuitem" onClick={() => void switchProfile()} className={menuItemClass}>
-                  Switch profile
+              <button type="button" role="menuitem" onClick={() => void switchProfile()} className={menuItemClass}>
+                Switch profile
+              </button>
+              {isAdmin && (
+                <Link to="/settings" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+                  Settings
+                </Link>
+              )}
+              {status?.authRequired && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void logout()}
+                  disabled={loggingOut}
+                  className={menuItemClass}
+                >
+                  Log out
                 </button>
-                {isAdmin && (
-                  <Link
-                    to="/settings"
-                    role="menuitem"
-                    onClick={() => setMenuOpen(false)}
-                    className={menuItemClass}
-                  >
-                    Settings
-                  </Link>
-                )}
-                {status?.authRequired && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => void logout()}
-                    disabled={loggingOut}
-                    className={menuItemClass}
-                  >
-                    Log out
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+      <nav
+        aria-label="Main"
+        className="no-scrollbar flex items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm sm:px-6 lg:px-10"
+      >
+        {links.map((item) => (
+          <Link
+            key={item.label}
+            to={item.to}
+            aria-current={item.active ? 'page' : undefined}
+            className={`shrink-0 whitespace-nowrap transition ${
+              item.active ? 'font-semibold text-white' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
     </header>
   )
 }

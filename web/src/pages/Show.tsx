@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail } from '../api'
 import { useDownloads } from '../downloads'
 import { StatusPill } from '../components/StatusPill'
@@ -11,6 +11,8 @@ type Display = 'none' | DownloadStatus | 'downloaded'
 
 export function Show() {
   const { bookId = '' } = useParams()
+  const [searchParams] = useSearchParams()
+  const source = searchParams.get('source') || undefined
   const { byEpisode } = useDownloads()
   const [detail, setDetail] = useState<ShowDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -36,7 +38,7 @@ export function Show() {
     setError(null)
     setNotice(null)
     api
-      .show(bookId)
+      .show(bookId, source)
       .then((res) => {
         if (cancelled) return
         setDetail(res)
@@ -52,7 +54,7 @@ export function Show() {
     return () => {
       cancelled = true
     }
-  }, [bookId, attempt, loadLibrary])
+  }, [bookId, source, attempt, loadLibrary])
 
   useEvents((event) => {
     if (event.type === 'library' && event.bookId === bookId) loadLibrary()
@@ -112,7 +114,8 @@ export function Show() {
   async function watchEpisode(index: number) {
     setNotice(null)
     try {
-      const res = await fetch(`/api/shows/${encodeURIComponent(bookId)}/stream/${index}`)
+      const query = source ? `?source=${encodeURIComponent(source)}` : ''
+      const res = await fetch(`/api/shows/${encodeURIComponent(bookId)}/stream/${index}${query}`)
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || `Failed to get stream (${res.status})`)

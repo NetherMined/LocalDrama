@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { Page, Show } from '../api'
 import { errorMessage } from '../lib/format'
 import { ShowCard } from './ShowCard'
-import { EmptyState, GridSkeleton, LoadError, buttonClass } from './ui'
+import { EmptyState, LoadError, buttonClass } from './ui'
 
 interface Props {
   resetKey: string
@@ -49,7 +49,7 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
     return <LoadError message={error} onRetry={() => void fetchPage(1, true)} />
   }
 
-  if (loading && items.length === 0) return <GridSkeleton />
+  if (loading && items.length === 0) return <ShowGridSkeleton />
 
   if (!loading && items.length === 0) {
     return (
@@ -59,7 +59,7 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {items.map((show) => (
           <ShowCard key={show.bookId} show={show} />
         ))}
@@ -81,6 +81,19 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint }: Props) {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function ShowGridSkeleton({ count = 10 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="animate-pulse">
+          <div className="aspect-video rounded-md bg-panel-2" />
+          <div className="mt-2 h-3 w-3/4 rounded bg-panel-2" />
+        </div>
+      ))}
     </div>
   )
 }

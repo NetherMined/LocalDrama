@@ -159,6 +159,8 @@ export interface Show {
   playCount: number
   tags: string[]
   status?: string
+  source?: string | null
+  sourceName?: string | null
 }
 
 export interface HomeRow {
@@ -199,6 +201,7 @@ export interface Suggestion {
 export interface ShowDetail {
   show: Show | null
   episodes: Episode[]
+  source?: string | null
 }
 
 export interface DownloadItem {
@@ -317,7 +320,8 @@ export const api = {
   latest: (page = 1) => request<Page<Show>>(`/api/browse/latest?page=${page}`),
   search: (q: string, page = 1) => request<Page<Show>>(`/api/search?q=${enc(q)}&page=${page}`),
   suggest: (q: string) => request<{ items: Suggestion[] }>(`/api/search/suggest?q=${enc(q)}`),
-  show: (bookId: string) => request<ShowDetail>(`/api/shows/${enc(bookId)}`),
+  show: (bookId: string, source?: string) =>
+    request<ShowDetail>(`/api/shows/${enc(bookId)}${source ? `?source=${enc(source)}` : ''}`),
 
   favourites: () => request<{ items: Show[] }>('/api/favourites'),
   addFavourite: (bookId: string) => request<{ ok: true }>(`/api/favourites/${enc(bookId)}`, { method: 'POST' }),

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, type Suggestion } from '../api'
+import { SearchIcon } from './icons'
 
 export function SearchBox() {
   const navigate = useNavigate()
@@ -52,7 +53,7 @@ export function SearchBox() {
   const showList = open && items.length > 0
 
   return (
-    <form ref={wrapRef} role="search" onSubmit={submit} className="relative w-full max-w-xs">
+    <form ref={wrapRef} role="search" onSubmit={submit} className="relative w-full max-w-xl">
       <label htmlFor="site-search" className="sr-only">
         Search dramas
       </label>
@@ -74,8 +75,15 @@ export function SearchBox() {
         aria-expanded={showList}
         aria-controls={listId}
         aria-autocomplete="list"
-        className="w-full rounded-md border border-line bg-panel px-3 py-2 text-sm text-white placeholder:text-muted outline-none focus:border-accent-hi"
+        className="w-full rounded-md border border-transparent bg-white/10 py-2 pr-11 pl-4 text-sm text-white placeholder:text-muted outline-none transition focus:border-accent-hi focus:bg-black"
       />
+      <button
+        type="submit"
+        aria-label="Search"
+        className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1.5 text-muted transition hover:text-white"
+      >
+        <SearchIcon className="h-4 w-4" />
+      </button>
       {showList && (
         <ul
           id={listId}

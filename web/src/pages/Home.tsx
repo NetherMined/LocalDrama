@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ContinueItem, type HomeData, type Show } from '../api'
+import { api, type ContinueItem, type HomeData } from '../api'
+import { Hero } from '../components/Hero'
 import { ShowCard } from '../components/ShowCard'
 import { ShowRow, ShowRowSkeleton } from '../components/ShowRow'
 import { RefreshIcon } from '../components/icons'
-import { LoadError, Poster, buttonClass } from '../components/ui'
+import { LoadError, buttonClass } from '../components/ui'
 import { errorMessage, fmtEpisode, fmtMinutesLeft } from '../lib/format'
 
 const SKELETON_ROWS = ['Currently Watching', 'Latest', 'Trending Now']
+const CONTINUE_ID = 'continue-watching'
 
 export function Home() {
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
-  const [sortBy, setSortBy] = useState<'default' | 'name'>('default')
 
   const load = useCallback(async (refresh: boolean) => {
     setRefreshing(true)
@@ -47,21 +48,18 @@ export function Home() {
     }
   }, [])
 
-  const sortedRows = useMemo(() => {
-    if (!data?.rows) return []
-    const rows = [...data.rows]
-    if (sortBy === 'name') {
-      return rows.sort((a, b) => a.title.localeCompare(b.title))
-    }
-    return rows
-  }, [data, sortBy])
-
-  if (!data && error) return <LoadError title="Could not load the home page" message={error} onRetry={() => void load(false)} />
+  if (!data && error) {
+    return (
+      <div className="px-4 py-6 sm:px-6 lg:px-10">
+        <LoadError title="Could not load the home page" message={error} onRetry={() => void load(false)} />
+      </div>
+    )
+  }
 
   if (!data) {
     return (
-      <div className="space-y-12" aria-busy="true" aria-label="Loading home">
-        <div className="h-80 animate-pulse rounded-xl bg-panel-2" />
+      <div className="space-y-8 px-4 py-6 sm:px-6 lg:px-10" aria-busy="true" aria-label="Loading home">
+        <div className="h-[70vh] min-h-[420px] animate-pulse bg-panel-2" />
         {SKELETON_ROWS.map((title) => (
           <ShowRowSkeleton key={title} title={title} />
         ))}
@@ -69,82 +67,84 @@ export function Home() {
     )
   }
 
-  const hasAnyRows = sortedRows.some((r) => (r.items?.length ?? 0) > 0)
+  const rows = data.rows.filter((row) => (row.items?.length ?? 0) > 0)
+  const hasContinue = continueItems.length > 0
+
+  function scrollToContinue() {
+    if (hasContinue) document.getElementById(CONTINUE_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const refreshButton = (
+    <button
+      type="button"
+      onClick={() => void load(true)}
+      disabled={refreshing}
+      aria-label="Refresh"
+      title="Refresh"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+    >
+      <RefreshIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+    </button>
+  )
 
   return (
-    <div className="space-y-12 pb-10">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <label htmlFor="sort" className="text-sm text-muted">Sort</label>
-          <select
-            id="sort"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 text-sm"
-          >
-            <option value="default">Default</option>
-            <option value="name">Name</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-3">
-          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            aria-label="Refresh"
-            title="Refresh"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-panel-2 text-white transition hover:bg-line disabled:opacity-40"
-          >
-            <RefreshIcon className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+    <div className="pb-12">
+      {data.hero && <Hero show={data.hero} hasContinue={hasContinue} onContinue={scrollToContinue} />}
 
-      {data.hero && <Hero show={data.hero} />}
+      <div className="space-y-8 px-4 pt-2 sm:px-6 lg:px-10">
+        {error && (
+          <p role="alert" className="text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
-      {continueItems.length > 0 && (
-        <ShowRow
-          title="Currently Watching"
-          items={continueItems}
-          itemKey={(item) => `${item.show.bookId}-${String(item.episode.id)}`}
-          render={(item) => <ContinueCard item={item} />}
-        />
-      )}
+        {hasContinue && (
+          <ShowRow
+            id={CONTINUE_ID}
+            title="Currently Watching"
+            items={continueItems}
+            itemKey={(item) => `${item.show.bookId}-${String(item.episode.id)}`}
+            render={(item) => <ContinueCard item={item} />}
+            action={refreshButton}
+          />
+        )}
 
-      {hasAnyRows ? (
-        sortedRows
-          .filter((row) => (row.items?.length ?? 0) > 0)
-          .map((row) => (
+        {rows.length > 0 ? (
+          rows.map((row, index) => (
             <ShowRow
               key={row.key}
               title={row.title}
-              items={row.items || []}
+              items={row.items}
               itemKey={(show) => show.bookId}
               render={(show) => <ShowCard show={show} />}
+              action={index === 0 && !hasContinue ? refreshButton : undefined}
             />
           ))
-      ) : (
-        <div className="rounded-xl border border-line bg-panel px-6 py-12 text-center">
-          <p className="text-lg font-medium">No shows available yet</p>
-          <p className="mt-2 text-sm text-muted">
-            Configure a source (DramaBuzz / GoodBos) with a valid API key in Settings, then refresh.
-          </p>
-          <Link to="/settings" className={`${buttonClass('ghost')} mt-4 inline-flex`}>
-            Open Settings
-          </Link>
-        </div>
-      )}
+        ) : (
+          <div className="rounded-xl border border-line bg-panel px-6 py-12 text-center">
+            <p className="text-lg font-medium">No shows available yet</p>
+            <p className="mt-2 text-sm text-muted">
+              Configure a source (DramaBuzz / GoodBos) with a valid API key in Settings, then refresh.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <Link to="/settings" className={buttonClass('ghost')}>
+                Open Settings
+              </Link>
+              {refreshButton}
+            </div>
+          </div>
+        )}
 
-      {data.errors?.length > 0 && (
-        <ul className="space-y-1">
-          {data.errors.map((e) => (
-            <li key={e.key} className="text-xs text-muted">
-              {e.key}: {e.error}
-            </li>
-          ))}
-        </ul>
-      )}
+        {data.errors?.length > 0 && (
+          <ul className="space-y-1">
+            {data.errors.map((e) => (
+              <li key={e.key} className="line-clamp-2 text-xs break-all text-muted">
+                {e.key}: {e.error}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
@@ -158,74 +158,4 @@ function ContinueCard({ item }: { item: ContinueItem }) {
       ? `${fmtEpisode(episode.episodeIndex)} · ${fmtMinutesLeft(position, duration)}`
       : `Up next: ${fmtEpisode(episode.episodeIndex)}`
   return <ShowCard show={show} to={to} progress={progress} caption={caption} />
-}
-
-function Hero({ show }: { show: Show }) {
-  const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
-
-  async function downloadAll() {
-    setBusy(true)
-    setNotice(null)
-    try {
-      const res = await api.enqueue(show.bookId)
-      setNotice({
-        kind: 'ok',
-        text: res.added === 1 ? 'Added 1 episode to downloads.' : `Added ${res.added} episodes to downloads.`,
-      })
-    } catch (err) {
-      setNotice({ kind: 'err', text: errorMessage(err) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section aria-label="Featured drama" className="relative isolate overflow-hidden rounded-xl border border-line bg-panel">
-      {show.cover && (
-        <img
-          src={show.cover}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
-        />
-      )}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-ink via-ink/85 to-ink/40" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-transparent to-transparent" />
-
-      <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-end sm:gap-8 sm:p-10">
-        <div className="w-28 shrink-0 sm:w-48 md:w-56">
-          <Poster src={show.cover} name={show.name} className="rounded-lg shadow-2xl shadow-black/70" />
-        </div>
-        <div className="min-w-0 flex-1 space-y-4">
-          <h1 className="line-clamp-2 text-3xl leading-tight font-extrabold tracking-tight sm:text-5xl">{show.name}</h1>
-          {show.tags.length > 0 && (
-            <ul className="flex flex-wrap gap-2" aria-label="Tags">
-              {show.tags.slice(0, 6).map((tag) => (
-                <li key={tag} className="rounded-full border border-line bg-ink/60 px-3 py-1 text-xs text-white/80">
-                  {tag}
-                </li>
-              ))}
-            </ul>
-          )}
-          {show.introduction && (
-            <p className="line-clamp-3 max-w-2xl text-sm leading-relaxed text-white/80 sm:text-base">{show.introduction}</p>
-          )}
-          <div className="flex flex-wrap gap-3 pt-1">
-            <Link to={`/show/${encodeURIComponent(show.bookId)}`} className={buttonClass('ghost')}>
-              View
-            </Link>
-            <button type="button" onClick={() => void downloadAll()} disabled={busy} className={buttonClass()}>
-              {busy ? 'Queuing...' : 'Download all'}
-            </button>
-          </div>
-          {notice && (
-            <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
-              {notice.text}
-            </p>
-          )}
-        </div>
-      </div>
-    </section>
-  )
 }

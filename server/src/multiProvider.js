@@ -180,12 +180,15 @@ export function createMultiProvider({ mock, port, language, requestDelay, resolv
   async function withSource(fn, sourceId) {
     const source = getSource(sourceId);
     if (!source) throw httpError(503, 'No source configured');
+    // Only the active source drives the upstream banner; a down secondary
+    // platform on the home page shouldn't claim the whole API is unreachable.
+    const isActive = source.id === getActiveSource()?.id;
     try {
       const value = await fn(source);
-      record(true);
+      if (isActive) record(true);
       return value;
     } catch (err) {
-      record(false, err);
+      if (isActive) record(false, err);
       throw err;
     }
   }

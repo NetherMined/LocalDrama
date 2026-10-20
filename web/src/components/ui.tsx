@@ -9,14 +9,25 @@ export function buttonClass(variant: 'primary' | 'ghost' | 'danger' = 'primary')
   return `${base} border border-line bg-panel-2 text-white hover:bg-line`
 }
 
-export function Poster({ src, name, className = '' }: { src?: string; name: string; className?: string }) {
+export function Poster({
+  src,
+  name,
+  className = '',
+  aspect = 'portrait',
+}: {
+  src?: string
+  name: string
+  className?: string
+  aspect?: 'portrait' | 'landscape'
+}) {
   const [failed, setFailed] = useState(false)
+  const ratio = aspect === 'landscape' ? 'aspect-video' : 'aspect-[3/4]'
   if (!src || failed) {
     return (
       <div
         role="img"
         aria-label={name}
-        className={`flex aspect-[3/4] items-center justify-center bg-gradient-to-br from-panel-2 to-line text-3xl font-bold text-muted ${className}`}
+        className={`flex ${ratio} items-center justify-center bg-gradient-to-br from-panel-2 to-line text-3xl font-bold text-muted ${className}`}
       >
         {name.charAt(0).toUpperCase() || '?'}
       </div>
@@ -28,7 +39,7 @@ export function Poster({ src, name, className = '' }: { src?: string; name: stri
       alt={name}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={`aspect-[3/4] w-full bg-panel-2 object-cover ${className}`}
+      className={`${ratio} w-full bg-panel-2 object-cover ${aspect === 'landscape' ? 'object-top' : ''} ${className}`}
     />
   )
 }
