@@ -4,6 +4,7 @@ import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail } fr
 import { useDownloads } from '../downloads'
 import { StatusPill } from '../components/StatusPill'
 import { Poster, LoadError, buttonClass } from '../components/ui'
+import { VideoPlayer } from '../components/VideoPlayer'
 import { errorMessage, fmtEpisode } from '../lib/format'
 
 type Display = 'none' | DownloadStatus | 'downloaded'
@@ -18,7 +19,7 @@ export function Show() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const [watching, setWatching] = useState<{ index: number; url: string } | null>(null)
+  const [watching, setWatching] = useState<{ index: number; url: string; hls: boolean } | null>(null)
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
 
@@ -116,9 +117,9 @@ export function Show() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || `Failed to get stream (${res.status})`)
       }
-      const { url } = await res.json()
+      const { url, hls } = await res.json()
       if (!url) throw new Error('No stream URL returned')
-      setWatching({ index, url })
+      setWatching({ index, url, hls: !!hls })
     } catch (err) {
       setNotice({ kind: 'err', text: errorMessage(err) })
     }
@@ -157,13 +158,11 @@ export function Show() {
 
       {watching && (
         <div className="overflow-hidden rounded-lg bg-black shadow-2xl">
-          <video
+          <VideoPlayer
             key={watching.url}
             src={watching.url}
-            controls
-            autoPlay
-            playsInline
-            className="aspect-video w-full"
+            hls={watching.hls}
+            poster={show?.cover}
           />
           <div className="flex items-center justify-between bg-ink px-4 py-2 text-sm">
             <span>Episode {watching.index}</span>

@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { httpError } from './errors.js';
 import { isWindowsPath, sanitizeSegment } from './paths.js';
+import { isHlsUrl } from './platforms/common.js';
 
 export { sanitizeSegment };
 
@@ -236,6 +238,91 @@ export function createDownloadManager({ db, provider, events, getConfig, library
     return size;
   }
 
+  async function downloadHls(url, dest, row, signal) {
+    const part = `${dest}.part`;
+    await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+    await fs.promises.rm(part, { force: true });
+
+    const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
+    const args = [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-user_agent',
+      'Mozilla/5.0 LocalDrama/0.1',
+      '-i',
+      url,
+      '-c',
+      'copy',
+      '-movflags',
+      '+faststart',
+      '-f',
+      'mp4',
+      part,
+    ];
+
+    await new Promise((resolve, reject) => {
+      const child = spawn(ffmpeg, args, { windowsHide: true });
+      let stderr = '';
+      let aborted = false;
+      const timer = setInterval(async () => {
+        const size = await partSize(part);
+        if (size) writeProgress(row.id, size, 0);
+      }, PROGRESS_INTERVAL_MS);
+      timer.unref?.();
+
+      const cleanup = () => {
+        clearInterval(timer);
+        signal.removeEventListener('abort', onAbort);
+      };
+      const onAbort = () => {
+        aborted = true;
+        child.kill('SIGKILL');
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+
+      child.stderr.on('data', (chunk) => {
+        stderr = `${stderr}${String(chunk)}`.slice(-4000);
+      });
+      child.on('error', (err) => {
+        cleanup();
+        if (err.code === 'ENOENT') {
+          reject(
+            permanentError(
+              'HLS download requires ffmpeg. Install ffmpeg or rebuild the LocalDrama Docker image.',
+            ),
+          );
+          return;
+        }
+        reject(err);
+      });
+      child.on('close', async (code) => {
+        cleanup();
+        if (aborted) {
+          await fs.promises.rm(part, { force: true }).catch(() => {});
+          reject(pauseError());
+          return;
+        }
+        if (code !== 0) {
+          const err = new Error(`ffmpeg failed (${code}): ${stderr.trim().slice(0, 300)}`);
+          err.expired = /\b(401|403)\b|Unauthorized|Forbidden/i.test(stderr);
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    const size = await partSize(part);
+    if (!size) {
+      await fs.promises.rm(part, { force: true });
+      throw new Error('Downloaded file is empty');
+    }
+    await fs.promises.rename(part, dest);
+    return size;
+  }
+
   async function download(row, signal) {
     const cfg = getConfig();
     checkDownloadRoot(cfg.downloadRoot);
@@ -251,7 +338,9 @@ export function createDownloadManager({ db, provider, events, getConfig, library
 
       const url = pickVideoUrl(chapter, cfg.quality) ?? (await provider.streamUrl(row.bookId, row.episodeIndex));
       try {
-        const size = await streamToFile(url, dest, row, signal);
+        const size = isHlsUrl(url)
+          ? await downloadHls(url, dest, row, signal)
+          : await streamToFile(url, dest, row, signal);
         return { filePath: dest, size };
       } catch (err) {
         const fsMessage = describeFsError(err, cfg.downloadRoot);

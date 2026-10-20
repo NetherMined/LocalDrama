@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { httpError } from '../errors.js';
+import { isHlsUrl } from '../platforms/common.js';
 
 function pageParam(value) {
   const n = Number.parseInt(value, 10);
@@ -59,6 +60,10 @@ export function registerBrowseRoutes(app, ctx) {
     const index = Number(req.params.index);
     if (!Number.isInteger(index) || index < 0) throw httpError(400, 'Invalid episode index');
     const url = await provider.streamUrl(bookId, index);
-    return { url };
+    const hls = isHlsUrl(url);
+    return {
+      url: hls ? `/api/hls?url=${encodeURIComponent(url)}` : url,
+      hls,
+    };
   });
 }

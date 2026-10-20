@@ -48,8 +48,21 @@ export function registerSourceRoutes(app, ctx) {
     const source = cfg.sources.find((s) => s.id === id);
     if (!source) throw httpError(404, 'Source not found');
     if (!source.enabled) throw httpError(400, 'Source is not enabled');
-    if (source.type === 'goodbos' && platformKind(source) === 'unsupported') {
-      throw httpError(400, 'This platform is not supported yet. Supported GoodBos platforms: DramaBox and NetShort.');
+    if (source.type === 'goodbos') {
+      if (platformKind(source) === 'unsupported') {
+        throw httpError(400, 'This GoodBos platform is not supported yet.');
+      }
+      const health = await testSource('goodbos', {
+        ...source.config,
+        apiKey: source.config.apiKey || sharedApiKey(cfg),
+      });
+      if (!health.ok) {
+        throw httpError(502, `Source test failed: ${health.error || 'unknown error'}`);
+      }
+      const sources = cfg.sources.map((s) => (s.id === id ? { ...s, lastHealth: health } : s));
+      saveConfig({ sources, activeSourceId: id });
+      if (ctx.provider?.setActiveSource) ctx.provider.setActiveSource(id);
+      return { ok: true, activeSourceId: id, health };
     }
 
     saveConfig({ activeSourceId: id });

@@ -19,6 +19,10 @@ RUN apt-get update \
  && cd server && npm ci --omit=dev \
  && apt-get purge -y python3 make g++ && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* /root/.npm
+# HLS platforms are downloaded with ffmpeg; keep it in the runtime image.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 COPY server/ ./server/
 COPY --from=web-build /app/web/dist ./web/dist
 RUN mkdir -p /data /media && chown node:node /data /media

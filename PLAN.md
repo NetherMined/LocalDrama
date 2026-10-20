@@ -245,3 +245,56 @@ DB tables: `shows` (cache, upserted from every list response), `downloads` (queu
 - mDNS: `bonjour-service` find from a separate node script sees "Dramabox Server".
 - Docker: `docker build` succeeds and `docker compose up -d` serves `/api/health` healthy on a test port. Then tear it down.
 - The web build is clean.
+
+---
+
+# Ticket: Platform activation fix, streaming-style UI, Browse filters (2026-10-20)
+
+## Review findings
+- **"This platform is not supported yet. Supported GoodBos platforms: DramaBox and NetShort."** comes from the
+  *committed* `server/src/routes/sources.js`. The working tree already replaces it with a 22-adapter registry
+  (`server/src/platforms/*`), but the running container `dramaus-dramabox-1` (:8096) was built from the old code —
+  `server/src/platforms/` does not exist inside it. The fix is a rebuild, not new code.
+- Activation for GoodBos sources now runs a full smoke test (browse → episodes → stream byte). Platforms whose
+  upstream is down will fail with `Source test failed: …` (502) instead — that is expected, not the old bug.
+- `home.js` only fetches the *active* source; other enabled platforms are skipped. Browse has no query params.
+- Shows already carry `tags[]` (normalized from tagV3s/tags/category/genre), which is what filters can build on.
+
+## Phase 1 — Rebuild & verify platform activation (no UI changes)
+1. `docker compose build && docker compose up -d` so the container runs the working-tree server.
+2. Verify inside the container: `server/src/platforms/` exists; `GET /api/sources` lists all 22 GoodBos platforms.
+3. Run `POST /api/sources/:id/test` against every platform; record which pass / fail and why.
+4. Small server fixes only if the sweep shows them:
+   - `vibeshort.goodbos.online` is mapped by both Storyreel (`hosts`) and Vibeshort — later adapter wins in
+     `byHost`; drop it from Storyreel's `hosts` so the label/adapter is unambiguous.
+   - Surface the activation error text in the Sources panel (it currently shows the raw message).
+5. Commit the platform work.
+
+## Phase 2 — Server: source-aware browse + categories
+1. `multiProvider`: `latest/search/trending(page, { sourceId })` — run against a given enabled source, default active.
+2. `GET /api/browse/latest?page&source&tag&sort` — `sort` = `latest | popular | name | episodes`; `tag` filters on
+   normalized tags (server-side over fetched pages, case-insensitive).
+3. `GET /api/browse/categories?source=` — tag counts from the `shows` cache for that source (top 30), so chips are
+   instant; refreshed whenever pages are upserted.
+4. `/api/home`: one row per enabled platform (cap concurrency at 3, 5-min cache per source), plus
+   "Trending Now", "New & Popular", and up to 3 genre rows ("Romance", "Revenge", …) built from the most common tags.
+
+## Phase 3 — Web: streaming-style redesign (matches reference screenshot)
+1. **Top nav**: logo left, centred search field, notification bell (download activity) + avatar menu right;
+   second line of links: Home · Browse · New & Popular · My List (Favourites) · Library · Downloads · Browse by Platform.
+2. **Hero**: full-bleed backdrop (blurred/scaled cover + dark gradient), large title, tags line, Play / More Info,
+   and 3 quick-link tiles (New & Popular, Continue Watching, Browse by Platform) like the reference.
+3. **Cards**: landscape 16:9 thumbnails (cover `object-cover`, top-anchored) with episode-count badge top-right,
+   play-icon hover overlay, title + first tag beneath. Keep a compact "Continue Watching" strip with progress bar.
+4. **Rows**: section titles in bold white, horizontal scroll with edge arrow buttons on desktop, snap on mobile.
+5. Black (#000/#0b0b0f) background, red accent kept; responsive down to 360px.
+
+## Phase 4 — Web: Browse filters & categories
+1. Sticky filter bar: **Platform** select (enabled sources), **Sort** select, **Category** chip row (from
+   `/api/browse/categories`, "All" first, horizontally scrollable).
+2. State lives in the URL query (`?source=&tag=&sort=`) so filters are shareable/back-button safe.
+3. Grid uses the new landscape card; infinite "Load more" retained; empty state per filter ("No Romance dramas on
+   ReelShort yet").
+4. `npm run build` for web + rebuild container; manual check in browser at :8096.
+
+Each phase stops for confirmation before the next.

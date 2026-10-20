@@ -88,7 +88,7 @@ async function fetchEpisodes(source, bookId, fresh = false) {
 }
 
 async function fetchPlatformChapters(source, bookId, opts, fresh = false) {
-  const key = `${source.id}:${bookId}`;
+  const key = `${source.id}:${bookId}:${opts.quality || 720}`;
   if (!fresh) {
     const cached = chapterCache.get(key);
     if (cached && Date.now() - cached.at < CHAPTER_TTL_MS) return cached.raw;
@@ -147,6 +147,10 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
   let upstream = { ok: true, at: null };
   const lang = language || 'en';
 
+  function quality() {
+    return Number(getConfig().quality) || 720;
+  }
+
   function record(ok, err) {
     const at = new Date().toISOString();
     upstream = ok ? { ok: true, at } : { ok: false, error: String(err?.message || err), at };
@@ -174,7 +178,12 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
   async function latest(page = 1) {
     return withSource(async (source) => {
       if (source.type === 'goodbos') {
-        return platformLatest(source, { page, lang, apiKey: sourceApiKey(source) });
+        return platformLatest(source, {
+          page,
+          lang,
+          apiKey: sourceApiKey(source),
+          quality: quality(),
+        });
       }
       if (source.type === 'dramabuzz') {
         // Use the DramaBox GoodBos endpoint for latest/trending
@@ -205,7 +214,13 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
   async function search(q, page = 1) {
     return withSource(async (source) => {
       if (source.type === 'goodbos') {
-        return platformSearch(source, { q, page, lang, apiKey: sourceApiKey(source) });
+        return platformSearch(source, {
+          q,
+          page,
+          lang,
+          apiKey: sourceApiKey(source),
+          quality: quality(),
+        });
       }
       if (source.type === 'dramabuzz') {
         const data = await goodbosRequest(
@@ -235,7 +250,12 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
   async function chapters(bookId, { fresh = false } = {}) {
     return withSource(async (source) => {
       if (source.type === 'goodbos') {
-        return fetchPlatformChapters(source, bookId, { lang, apiKey: sourceApiKey(source) }, fresh);
+        return fetchPlatformChapters(
+          source,
+          bookId,
+          { lang, apiKey: sourceApiKey(source), quality: quality() },
+          fresh,
+        );
       }
       if (source.type === 'dramabuzz') {
         const raw = await fetchEpisodes(source, bookId, fresh);
@@ -257,11 +277,19 @@ export function createMultiProvider({ mock, port, language, requestDelay }) {
   async function streamUrl(bookId, index) {
     return withSource(async (source) => {
       if (source.type === 'goodbos') {
-        const data = await fetchPlatformChapters(source, bookId, { lang, apiKey: sourceApiKey(source) });
+        const data = await fetchPlatformChapters(source, bookId, {
+          lang,
+          apiKey: sourceApiKey(source),
+          quality: quality(),
+        });
         const ep = data.chapters.find((c) => c.index === Number(index));
         const direct = ep?.videoUrl || firstCdnUrl(ep?.cdnList);
         if (direct) return direct;
-        return platformStreamUrl(source, bookId, index, { lang, apiKey: sourceApiKey(source) });
+        return platformStreamUrl(source, bookId, index, {
+          lang,
+          apiKey: sourceApiKey(source),
+          quality: quality(),
+        });
       }
       if (source.type === 'dramabuzz') {
         const raw = await fetchEpisodes(source, bookId);
