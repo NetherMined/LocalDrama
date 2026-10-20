@@ -57,14 +57,6 @@ export function defaultSources() {
       config: { ...shared, base: p.base, platform: p.id },
       lastHealth: null,
     })),
-    {
-      id: 'dramabos',
-      type: 'dramabos',
-      name: 'DramaBos',
-      enabled: false,
-      config: { apiKey: '' },
-      lastHealth: null,
-    },
   ];
 }
 
