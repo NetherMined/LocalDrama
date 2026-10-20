@@ -76,8 +76,8 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-line/60 bg-ink/85 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-        <Link to="/" className="rounded text-xl font-extrabold tracking-tight text-accent-hi">
-          Dramabox
+        <Link to="/" className="rounded text-xl font-extrabold tracking-tight text-rose-500">
+          LOCALDRAMA
         </Link>
         {status?.mock && (
           <span className="rounded border border-amber-400/50 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300">
@@ -91,12 +91,15 @@ export function Nav() {
           <NavLink to="/browse" className={navClass}>
             Browse
           </NavLink>
+          <NavLink to="/favourites" className={navClass}>
+            My Favourites
+          </NavLink>
           <NavLink to="/downloads" className={navClass}>
             Downloads
             {activeCount > 0 && (
               <span
                 aria-label={`${activeCount} active`}
-                className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold text-white"
+                className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-bold text-white"
               >
                 {activeCount}
               </span>
