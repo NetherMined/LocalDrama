@@ -276,9 +276,16 @@ export function registerSystemRoutes(app, ctx) {
   });
 
   app.post('/api/setup', async (req) => {
-    // Re-running setup would bypass the admin checks on settings (root, proxy, password).
     if (getConfig().configured) throw httpError(409, 'already_configured');
     const body = req.body ?? {};
+
+    // Allow password-only first registration (admin account creation)
+    if (body.password && !body.downloadRoot) {
+      const patch = await passwordPatch(body);
+      saveConfig({ ...patch, configured: false });
+      return { ok: true, needsSetup: true };
+    }
+
     const check = await checkWritableDir(body.downloadRoot);
     if (!check.ok) throw httpError(400, check.error);
 
