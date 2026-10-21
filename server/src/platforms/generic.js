@@ -39,7 +39,7 @@ function episodeNumber(obj, fallback) {
   return fallback;
 }
 
-function collectEpisodes(root, maxQuality = 720) {
+export function collectEpisodes(root, maxQuality = 720) {
   const found = [];
   const seen = new Set();
 

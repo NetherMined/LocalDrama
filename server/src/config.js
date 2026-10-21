@@ -36,6 +36,18 @@ const GOODBOS_PLATFORMS = [
   { id: 'flareflow', name: 'FlareFlow', base: 'https://plerplow.goodbos.online' },
   { id: 'vibeshort', name: 'Vibeshort', base: 'https://vibeshort.goodbos.online' },
   { id: 'serialplus', name: 'Serial+', base: 'https://serealplus.goodbos.online' },
+  { id: 'freereels', name: 'FreeReels', base: 'https://drakula.goodbos.online' },
+  { id: 'fundrama', name: 'FunDrama', base: 'https://drakula.goodbos.online' },
+  { id: 'microdrama', name: 'MicroDrama', base: 'https://drakula.goodbos.online' },
+  { id: 'bilitv', name: 'BiliTV', base: 'https://bilitv.goodbos.online' },
+  { id: 'stardusttv', name: 'Stardusttv2', base: 'https://stardusttv2.goodbos.online' },
+  { id: 'shortswave', name: 'ShortsWave', base: 'https://shortwave.goodbos.online' },
+  { id: 'dramanova', name: 'DramaNova', base: 'https://dramanova.goodbos.online' },
+  { id: 'cubetv', name: 'CubeTV', base: 'https://cubetv.goodbos.online' },
+  { id: 'happyshort', name: 'HappyShort', base: 'https://happyshort.goodbos.online' },
+  { id: 'pinedrama', name: 'PineDrama', base: 'https://pinedrama.goodbos.online' },
+  { id: 'raptdrama', name: 'RaptDrama', base: 'https://raptdrama.goodbos.online' },
+  { id: 'bonustv', name: 'BonusTV', base: 'https://bonustv.goodbos.online' },
 ];
 
 export function defaultSources() {

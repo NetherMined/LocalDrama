@@ -25,6 +25,20 @@ import {
   velolo,
   vigloo,
 } from './generic.js';
+import {
+  biliTv,
+  bonusTv,
+  cubeTv,
+  dramaNova,
+  freeReels,
+  funDrama,
+  happyShort,
+  microDrama,
+  pineDrama,
+  raptDrama,
+  shortSwave,
+  stardustTv,
+} from './extra.js';
 
 export const ADAPTERS = [
   dramaBox,
@@ -49,6 +63,18 @@ export const ADAPTERS = [
   vibeshort,
   flareFlow,
   serialPlus,
+  freeReels,
+  funDrama,
+  microDrama,
+  biliTv,
+  stardustTv,
+  shortSwave,
+  dramaNova,
+  cubeTv,
+  happyShort,
+  pineDrama,
+  raptDrama,
+  bonusTv,
 ];
 
 const byHost = new Map();
@@ -79,7 +105,12 @@ export function platformLabel(source) {
         }
       })()
     : '';
-  return adapterForHost(host)?.label || adapterById(source?.config?.platform)?.label || source?.name || 'This source';
+  return (
+    adapterById(source?.config?.platform)?.label ||
+    adapterForHost(host)?.label ||
+    source?.name ||
+    'This source'
+  );
 }
 
 export function supportedPlatformNames() {

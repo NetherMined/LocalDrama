@@ -9,19 +9,21 @@ import { hostOf, platformContext } from './platforms/common.js';
 
 const DEFAULT_LANG = 'en';
 
+// The platform id wins over the host: several platforms share the drakula
+// host (StarShort, FreeReels, FunDrama, MicroDrama).
+function resolveAdapter(source) {
+  const host = hostOf(source || {});
+  return adapterById(source?.config?.platform) || adapterForHost(host) || null;
+}
+
 function adapterFor(source) {
-  const host = hostOf(source);
-  const adapter =
-    adapterForHost(host) || adapterById(source?.config?.platform);
+  const adapter = resolveAdapter(source);
   if (!adapter) throw unsupported(source);
   return adapter;
 }
 
 export function platformKind(source) {
-  const host = hostOf(source || {});
-  return (
-    (adapterForHost(host) || adapterById(source?.config?.platform))?.id || 'unsupported'
-  );
+  return resolveAdapter(source)?.id || 'unsupported';
 }
 
 function unsupported(source) {
