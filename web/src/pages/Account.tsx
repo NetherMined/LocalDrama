@@ -23,7 +23,7 @@ export function Account() {
         <h1 className="text-2xl font-bold tracking-tight break-all sm:text-3xl">{account?.username ?? 'Account'}</h1>
         <span
           className={`rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wider uppercase ${
-            isAdmin ? 'bg-accent/20 text-accent-hi' : 'bg-white/10 text-white/80'
+            isAdmin ? 'bg-accent/20 text-accent-text' : 'bg-white/10 text-white/80'
           }`}
         >
           {isAdmin ? 'Admin' : 'User'}
@@ -165,7 +165,7 @@ function FavouritesCard({ profileName }: { profileName: string | null }) {
       description={profileName ? `Favourites for ${profileName}.` : 'Favourites for the current profile.'}
     >
       <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
-        <Link to="/profiles" className="inline-flex min-h-11 items-center font-semibold text-accent-hi hover:text-white">
+        <Link to="/profiles" className="inline-flex min-h-11 items-center font-semibold text-accent-text hover:text-white">
           Switch profile
         </Link>
       </div>
@@ -180,7 +180,7 @@ function FavouritesCard({ profileName }: { profileName: string | null }) {
 
       {items !== null && items.length === 0 && (
         <EmptyState title="No favourites yet">
-          <Link to="/browse" className="font-semibold text-accent-hi hover:text-white">
+          <Link to="/browse" className="font-semibold text-accent-text hover:text-white">
             Browse dramas
           </Link>{' '}
           and tap Add to Favourites on any show.
@@ -197,7 +197,7 @@ function FavouritesCard({ profileName }: { profileName: string | null }) {
                 onClick={() => remove(show)}
                 aria-label={`Remove ${show.name} from favourites`}
                 title="Remove from favourites"
-                className="absolute -top-2 -right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/85 text-base leading-none text-white ring-1 ring-white/30 transition hover:bg-rose-600"
+                className="absolute -top-2 -right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/85 text-base leading-none text-white ring-1 ring-white/30 transition hover:bg-accent-hi"
               >
                 <span aria-hidden="true">&times;</span>
               </button>
@@ -275,7 +275,7 @@ function DevicesCard() {
                 <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                   <span className="break-words">{d.name || 'Unknown device'}</span>
                   {d.current && (
-                    <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-semibold text-accent-hi">
+                    <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-semibold text-accent-text">
                       This device
                     </span>
                   )}

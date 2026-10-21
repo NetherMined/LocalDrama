@@ -23,7 +23,6 @@ interface DisplayInfo {
 
 const RESUME_MIN_SECONDS = 5
 const RANGE_SIZE = 50
-const PINK = '#f0436a'
 
 export function Show() {
   const { bookId = '' } = useParams()
@@ -295,7 +294,7 @@ export function Show() {
     return (
       <div className="animate-pulse" aria-busy="true" aria-label="Loading drama">
         <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-10">
-          <div className="mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] rounded-lg bg-panel-2" />
+          <div className="mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] short:max-h-[calc(100svh-5rem)] short:max-w-[calc((100svh-5rem)*9/16)] rounded-lg bg-panel-2" />
           <div className="mt-6 space-y-3 lg:mt-0">
             <div className="h-4 w-1/2 rounded bg-panel-2" />
             <div className="h-8 w-2/3 rounded bg-panel-2" />
@@ -353,21 +352,13 @@ export function Show() {
       <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start lg:gap-10">
         <div className="lg:sticky lg:top-24">
           {!playing && (
-            <div className="relative mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] overflow-hidden rounded-lg bg-black">
-              {show?.cover && (
-                <img
-                  src={show.cover}
-                  alt=""
-                  aria-hidden="true"
-                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
-                />
-              )}
-              <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="relative mx-auto aspect-[3/4] max-h-[60svh] w-full max-w-[calc(60svh*3/4)] overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 lg:max-h-[70vh] lg:max-w-[calc(70vh*3/4)] short:max-h-[calc(100svh-5rem)] short:max-w-[calc((100svh-5rem)*3/4)]">
+              <div className="absolute inset-0 flex items-center justify-center">
                 {show?.cover ? (
                   <img
                     src={show.cover}
                     alt={title}
-                    className="h-full max-h-full w-auto max-w-full rounded-md object-contain shadow-2xl shadow-black/70"
+                    className="h-full w-full object-cover"
                   />
                 ) : (
                   <p className="text-center text-lg font-bold">{title}</p>
@@ -378,8 +369,7 @@ export function Show() {
                 onClick={() => playEpisode(selectedIndex)}
                 disabled={episodes.length === 0}
                 aria-label={`Play episode ${selectedNumber}`}
-                className="absolute top-1/2 left-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-2xl shadow-black/70 transition hover:scale-105 disabled:opacity-40"
-                style={{ backgroundColor: PINK }}
+                className="absolute top-1/2 left-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-hi text-white shadow-2xl shadow-black/70 transition hover:scale-105 disabled:opacity-40"
               >
                 <PlayIcon className="ml-1 h-9 w-9" />
               </button>
@@ -439,7 +429,7 @@ export function Show() {
                   type="button"
                   aria-expanded={expanded}
                   onClick={() => setExpanded((v) => !v)}
-                  className="mt-1 min-h-11 text-sm font-semibold text-[#f0436a] hover:text-rose-300 sm:min-h-0"
+                  className="mt-1 min-h-11 text-sm font-semibold text-accent-text hover:text-white sm:min-h-0"
                 >
                   {expanded ? 'Less' : 'More'}
                 </button>
@@ -548,7 +538,7 @@ export function Show() {
                         aria-pressed={active}
                         onClick={() => setRangeStart(start)}
                         className={`min-h-11 shrink-0 text-sm font-semibold transition ${
-                          active ? 'text-[#f0436a]' : 'text-muted hover:text-white'
+                          active ? 'text-accent-text' : 'text-muted hover:text-white'
                         }`}
                       >
                         {start + 1}-{end}
@@ -557,7 +547,7 @@ export function Show() {
                   })}
                 </div>
               ) : (
-                <span className="text-sm font-semibold text-[#f0436a]">
+                <span className="text-sm font-semibold text-accent-text">
                   {episodes.length > 0 ? `1-${episodes.length}` : 'No episodes'}
                 </span>
               )}
@@ -649,7 +639,7 @@ function ActionButton({
     >
       <span
         className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
-          pressed ? 'bg-white/20 text-[#f0436a]' : 'bg-white/10 hover:bg-white/20'
+          pressed ? 'bg-white/20 text-accent-text' : 'bg-white/10 hover:bg-white/20'
         }`}
       >
         {children}
@@ -680,7 +670,7 @@ function EpisodeTile({
   const partial = !watched && percent > 0
   const state = watched ? ', watched' : partial ? ', in progress' : ''
   const tone = selected
-    ? 'bg-[#f0436a] text-white'
+    ? 'bg-accent-hi text-white'
     : watched
       ? 'bg-[#1c1c1c] text-white/40 hover:bg-[#262626]'
       : 'bg-[#2a2a2a] text-white hover:bg-[#363636]'
@@ -698,7 +688,7 @@ function EpisodeTile({
         {watched && !selected && <CheckIcon className="absolute top-1 right-1 h-3 w-3 text-white/50" />}
         {partial && (
           <span aria-hidden="true" className="absolute inset-x-2 bottom-1.5 block h-0.5 overflow-hidden rounded bg-white/15">
-            <span className="block h-full" style={{ width: `${percent}%`, backgroundColor: PINK }} />
+            <span className="block h-full bg-accent-hi" style={{ width: `${percent}%` }} />
           </span>
         )}
       </button>
@@ -738,7 +728,7 @@ function EpisodeRow({
         aria-current={selected || undefined}
         className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 text-left"
       >
-        <span className={`w-10 shrink-0 font-mono text-sm ${selected ? 'text-[#f0436a]' : 'text-muted'}`}>{number}</span>
+        <span className={`w-10 shrink-0 font-mono text-sm ${selected ? 'text-accent-text' : 'text-muted'}`}>{number}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{name}</span>
           {partial && (
@@ -750,7 +740,7 @@ function EpisodeRow({
               aria-valuenow={percent}
               className="mt-1.5 block h-1 w-full overflow-hidden rounded bg-white/10"
             >
-              <span className="block h-full" style={{ width: `${percent}%`, backgroundColor: PINK }} />
+              <span className="block h-full bg-accent-hi" style={{ width: `${percent}%` }} />
             </span>
           )}
         </span>

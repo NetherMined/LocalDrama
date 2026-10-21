@@ -28,7 +28,7 @@ import { Watch } from './pages/Watch'
 function NotFound() {
   return (
     <div className="py-16 text-center">
-      <p className="text-5xl font-extrabold text-accent-hi">404</p>
+      <p className="text-5xl font-extrabold text-accent-text">404</p>
       <p className="mt-2 text-muted">That page does not exist.</p>
       <Link to="/" className={`${buttonClass()} mt-6`}>
         Back to home
@@ -116,8 +116,8 @@ export default function App() {
       <main
         className={
           location.pathname === '/'
-            ? 'max-sm:pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
-            : 'mx-auto max-w-7xl px-4 py-6 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-8'
+            ? 'max-sm:pb-[calc(4.5rem+env(safe-area-inset-bottom))] max-sm:short:pb-4'
+            : 'mx-auto max-w-7xl px-4 py-6 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] max-sm:short:pb-6 sm:px-6 sm:py-8'
         }
       >
         <Routes>

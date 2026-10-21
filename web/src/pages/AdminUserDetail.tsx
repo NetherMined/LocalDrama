@@ -286,7 +286,7 @@ export function AdminUserDetail() {
                               <Poster src={show.cover} name={show.name} aspect="landscape" />
                             </div>
                             <div className="min-w-0">
-                              <p className="line-clamp-1 font-medium group-hover/user:text-accent-hi">{show.name}</p>
+                              <p className="line-clamp-1 font-medium group-hover/user:text-accent-text">{show.name}</p>
                               <p className="mt-1 text-xs text-muted">
                                 {w.episodes} {w.episodes === 1 ? 'episode' : 'episodes'} · last watched{' '}
                                 {fmtAgo(w.lastWatchedAt)}

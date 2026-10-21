@@ -114,7 +114,7 @@ export function Watch() {
           </Link>
         </p>
         <h1 className="text-xl font-bold break-words sm:text-2xl">
-          <span className="font-mono text-rose-400">{fmtEpisode(current.episodeIndex)}</span> {current.name}
+          <span className="font-mono text-accent-text">{fmtEpisode(current.episodeIndex)}</span> {current.name}
         </h1>
       </div>
     </div>

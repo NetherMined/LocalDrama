@@ -727,7 +727,7 @@ export function PlayerShell({
         fullscreen
           ? 'relative h-full w-full bg-black outline-none'
           : portrait
-            ? 'relative mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 outline-none'
+            ? 'relative mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] short:max-h-[calc(100svh-5rem)] short:max-w-[calc((100svh-5rem)*9/16)] overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 outline-none'
             : 'relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 outline-none'
       }
     >
@@ -754,7 +754,7 @@ export function PlayerShell({
             <p className="truncate text-xs text-white/70 sm:text-sm">{showTitle}</p>
             {current && (
               <p className="truncate text-sm font-semibold text-white sm:text-base">
-                <span className="font-mono text-rose-400">{fmtEpisode(current.index)}</span>
+                <span className="font-mono text-accent-text">{fmtEpisode(current.index)}</span>
                 {current.title ? ` · ${current.title}` : ''}
               </p>
             )}
@@ -808,7 +808,7 @@ export function PlayerShell({
       {status === 'error' && activeKey !== null && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4">
           <div role="alert" className="w-full max-w-sm rounded-lg border border-accent/40 bg-panel p-5 text-center">
-            <p className="font-semibold text-accent-hi">Could not play this episode</p>
+            <p className="font-semibold text-accent-text">Could not play this episode</p>
             {errorText && <p className="mt-1 text-sm break-words text-white/80">{errorText}</p>}
             <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
               <button type="button" onClick={() => startKey(activeKey, { fresh: true })} className={buttonClass()}>
@@ -900,7 +900,7 @@ export function PlayerShell({
           <div className="min-w-0 flex-1">
             <p className="text-xs tracking-wider text-zinc-400 uppercase">Up next</p>
             <p className="truncate text-sm font-semibold text-white">
-              <span className="font-mono text-rose-400">{fmtEpisode(next.index)}</span>{' '}
+              <span className="font-mono text-accent-text">{fmtEpisode(next.index)}</span>{' '}
               {next.title || `Episode ${next.index + 1}`}
             </p>
           </div>

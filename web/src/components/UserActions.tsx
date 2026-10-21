@@ -303,7 +303,7 @@ function DeleteDialog({
       >
         <div>
           <label htmlFor="delete-confirm" className="text-sm font-semibold">
-            Type <span className="font-mono text-accent-hi">{user.username}</span> to confirm
+            Type <span className="font-mono text-accent-text">{user.username}</span> to confirm
           </label>
           <input
             id="delete-confirm"

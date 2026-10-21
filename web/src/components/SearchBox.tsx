@@ -32,7 +32,17 @@ function highlight(text: string, query: string) {
   )
 }
 
-export function SearchBox() {
+interface SearchBoxProps {
+  /** Element id for the input; the sheet uses its own so two boxes never share one. */
+  inputId?: string
+  /** Full-width variant used inside the mobile search sheet. */
+  sheet?: boolean
+  autoFocus?: boolean
+  /** Called after a suggestion, a category or a search is chosen. */
+  onDone?: () => void
+}
+
+export function SearchBox({ inputId = 'site-search', sheet = false, autoFocus = false, onDone }: SearchBoxProps) {
   const navigate = useNavigate()
   const listId = useId()
   const formRef = useRef<HTMLFormElement>(null)
@@ -84,10 +94,17 @@ export function SearchBox() {
     setActive(-1)
   }
 
+  function go(to: string) {
+    closePanel()
+    setQuery('')
+    // In the sheet the sheet's own history entry is replaced, so Back does not return to the closed sheet.
+    navigate(to, { replace: sheet })
+    onDone?.()
+  }
+
   function submitSearch() {
     if (!q) return
-    closePanel()
-    navigate(`/search?q=${encodeURIComponent(q)}`)
+    go(`/search?q=${encodeURIComponent(q)}`)
   }
 
   function choose(option: Option) {
@@ -95,15 +112,11 @@ export function SearchBox() {
       submitSearch()
       return
     }
-    closePanel()
-    setQuery('')
-    navigate(showPath(option.show))
+    go(showPath(option.show))
   }
 
   function chooseCategory(category: SearchCategory) {
-    closePanel()
-    setQuery('')
-    navigate(`/browse?tag=${encodeURIComponent(category.name)}`)
+    go(`/browse?tag=${encodeURIComponent(category.name)}`)
   }
 
   function onSubmit(e: FormEvent) {
@@ -142,14 +155,16 @@ export function SearchBox() {
       role="search"
       onSubmit={onSubmit}
       onBlur={onBlur}
-      className="relative w-full min-w-0 sm:max-w-xl max-sm:focus-within:absolute max-sm:focus-within:left-4 max-sm:focus-within:w-[calc(100vw-2rem)] max-sm:focus-within:top-3 max-sm:focus-within:z-50"
+      className={`relative w-full min-w-0 ${sheet ? 'flex-1' : 'sm:max-w-xl'}`}
     >
-      <label htmlFor="site-search" className="sr-only">
+      <label htmlFor={inputId} className="sr-only">
         Search dramas
       </label>
       <input
-        id="site-search"
+        id={inputId}
         type="search"
+        autoFocus={autoFocus}
+        enterKeyHint="search"
         value={query}
         onChange={(e) => {
           setQuery(e.target.value)
@@ -167,7 +182,9 @@ export function SearchBox() {
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={panelOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
-        className="w-full rounded-md border border-transparent bg-white/10 py-2 pr-11 pl-4 text-sm text-white placeholder:text-muted outline-none transition focus:border-accent-hi focus:bg-black"
+        className={`w-full rounded-md border border-transparent bg-white/10 pr-11 pl-4 text-white placeholder:text-muted outline-none transition focus:border-accent-hi focus:bg-black ${
+          sheet ? 'py-3 text-base' : 'py-2 text-sm'
+        }`}
       />
       <button
         type="submit"
@@ -179,7 +196,11 @@ export function SearchBox() {
       {panelOpen && (
         <div
           onMouseDown={(e) => e.preventDefault()}
-          className="absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-black/95 shadow-2xl shadow-black/70 backdrop-blur"
+          className={`z-50 overflow-y-auto rounded-xl border border-white/10 bg-black/95 shadow-2xl shadow-black/70 backdrop-blur ${
+            sheet
+              ? 'fixed inset-x-3 top-[calc(max(env(safe-area-inset-top),0.75rem)+4.25rem)] bottom-3'
+              : 'absolute inset-x-0 top-full mt-2 max-h-[70vh]'
+          }`}
         >
           {categories.length > 0 && (
             <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-3 py-2.5">

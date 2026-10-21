@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 import { PlatformLogo } from './PlatformLogo'
 
-const itemClass = 'w-[140px] shrink-0 snap-start sm:w-[160px] lg:w-[180px]'
+const itemClass = 'w-[34vw] max-w-[160px] shrink-0 snap-start sm:w-[160px] sm:max-w-none lg:w-[180px]'
 
 const arrowClass =
   'absolute inset-y-0 z-10 hidden w-12 items-center justify-center text-white opacity-0 transition duration-200 group-hover/row:opacity-100 focus-visible:opacity-100 md:flex'

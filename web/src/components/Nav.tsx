@@ -9,6 +9,8 @@ import { UserIcon } from './icons'
 import { NotificationsBell } from './NotificationsBell'
 import { ProfileAvatar } from './ProfileAvatar'
 import { SearchBox } from './SearchBox'
+import { SearchSheet } from './SearchSheet'
+import { SearchIcon } from './icons'
 
 const menuItemClass =
   'flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-white/90 transition hover:bg-panel-2 hover:text-white focus-visible:bg-panel-2'
@@ -28,6 +30,7 @@ export function Nav() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [installOpen, setInstallOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const { installed } = useInstall()
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
@@ -100,18 +103,18 @@ export function Nav() {
         scrolled ? 'bg-black/95 backdrop-blur' : 'bg-gradient-to-b from-black/90 to-black/0'
       }`}
     >
-      <div className="flex items-center gap-3 px-4 pt-3 sm:gap-4 sm:px-6 lg:px-10">
+      <div className="flex items-center gap-3 px-4 pt-3 short:pt-2 sm:gap-4 sm:px-6 lg:px-10">
         <Link to="/" className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded">
           <svg className="h-7 w-7" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <defs>
               <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#7C3AED" />
-                <stop offset="100%" stopColor="#C026D3" />
+                <stop offset="0%" style={{ stopColor: 'var(--color-accent)' }} />
+                <stop offset="100%" style={{ stopColor: 'var(--color-accent-hi)' }} />
               </linearGradient>
             </defs>
             <polygon points="8,6 26,16 8,26" fill="url(#logo-grad)" />
           </svg>
-          <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-lg font-black tracking-tight text-transparent sm:text-xl">
+          <span className="bg-gradient-to-r from-accent-soft to-accent-text bg-clip-text text-lg font-black tracking-tight text-transparent sm:text-xl">
             Dramora
           </span>
         </Link>
@@ -120,9 +123,17 @@ export function Nav() {
             MOCK MODE
           </span>
         )}
-        <div className="flex min-w-0 flex-1 justify-center">
+        <div className="hidden min-w-0 flex-1 justify-center sm:flex">
           <SearchBox />
         </div>
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          aria-label="Search dramas"
+          className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10 sm:hidden"
+        >
+          <SearchIcon className="h-5 w-5" />
+        </button>
         <NotificationsBell />
         <div ref={menuRef} className="relative shrink-0">
           <button
@@ -133,7 +144,7 @@ export function Nav() {
             aria-expanded={menuOpen}
             aria-label={status?.profile ? `Profile: ${status.profile.name}` : 'Profile menu'}
             title={status?.profile?.name ?? 'Profile'}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full transition hover:ring-2 hover:ring-white/60 focus-visible:ring-2"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition hover:ring-2 hover:ring-white/60 focus-visible:ring-2 sm:h-10 sm:w-10"
           >
             {status?.profile ? (
               <ProfileAvatar name={status.profile.name} color={status.profile.color} className="h-9 w-9 text-sm" />
@@ -200,7 +211,7 @@ export function Nav() {
       </div>
       <nav
         aria-label="Main"
-        className="no-scrollbar hidden items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm sm:flex sm:px-6 lg:px-10"
+        className="no-scrollbar hidden items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm short:gap-4 short:pt-1 short:pb-1.5 short:text-xs sm:flex sm:px-6 lg:px-10"
       >
         {links.filter((item) => isAdmin || item.to !== '/downloads').map((item) => (
           <Link
@@ -217,7 +228,8 @@ export function Nav() {
       </nav>
     </header>
       {installOpen && <InstallDialog onClose={() => setInstallOpen(false)} />}
-      <BottomTabs isAdmin={isAdmin} />
+      {searchOpen && <SearchSheet onClose={() => setSearchOpen(false)} />}
+      <BottomTabs isAdmin={isAdmin} onSearch={() => setSearchOpen(true)} />
     </>
   )
 }

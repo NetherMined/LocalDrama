@@ -77,7 +77,7 @@ export function Modal({
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={`w-full overflow-y-auto rounded-t-xl border border-line bg-panel p-5 shadow-2xl shadow-black/70 outline-none sm:rounded-xl sm:p-6 ${
-          size === 'lg' ? 'max-h-[80vh] max-w-lg' : 'max-h-[90vh] max-w-md'
+          size === 'lg' ? 'max-h-[80svh] max-w-lg' : 'max-h-[90svh] max-w-md'
         }`}
       >
         <h2 id={titleId} className="text-lg font-bold tracking-tight">

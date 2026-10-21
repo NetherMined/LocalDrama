@@ -116,7 +116,7 @@ export function Home() {
   if (!data) {
     return (
       <div className="space-y-8 px-4 py-6 sm:px-6 lg:px-10" aria-busy="true" aria-label="Loading home">
-        <div className="h-[70vh] min-h-[420px] animate-pulse bg-panel-2" />
+        <div className="h-[60svh] min-h-[360px] animate-pulse bg-panel-2 sm:h-[70vh] sm:min-h-[420px] short:h-[85svh] short:min-h-0" />
         {SKELETON_ROWS.map((title) => (
           <ShowRowSkeleton key={title} title={title} />
         ))}

@@ -5,7 +5,7 @@ import { errorMessage, safeNext } from '../lib/format'
 import { useStatus } from '../status'
 
 const inputClass =
-  'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500'
+  'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-accent-hi'
 
 const REASON_TEXT: Record<string, string> = {
   expired: 'Session expired. Sign in again to continue.',
@@ -46,18 +46,18 @@ export function Login() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-b from-black via-zinc-950 to-black px-4">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-rose-900/20 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-accent/20 via-transparent to-transparent" />
       <form
         onSubmit={(e) => void submit(e)}
         className="relative z-10 w-full max-w-md space-y-6 rounded-2xl border border-white/10 bg-black/70 p-8 shadow-2xl backdrop-blur-xl"
       >
         <div className="text-center">
-          <p className="text-3xl font-black tracking-tight text-rose-500">DRAMAUS</p>
+          <p className="bg-gradient-to-r from-accent-soft to-accent-text bg-clip-text text-3xl font-black tracking-tight text-transparent">Dramora</p>
           <h1 className="mt-2 text-2xl font-semibold text-white">Sign in</h1>
         </div>
 
         {defaultCredentials && (
-          <p role="note" className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-white/90">
+          <p role="note" className="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-white/90">
             First sign-in: username <strong>Admin</strong>, password <strong>12345</strong>. You'll be asked to
             choose a new password straight away.
           </p>
@@ -108,7 +108,7 @@ export function Login() {
         <button
           type="submit"
           disabled={submitting || !username.trim() || !password}
-          className="w-full rounded-md bg-rose-600 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
+          className="w-full rounded-md bg-gradient-to-r from-accent to-accent-hi py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
         >
           {submitting ? 'Please wait…' : 'Sign in'}
         </button>

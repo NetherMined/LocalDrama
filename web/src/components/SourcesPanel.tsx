@@ -142,7 +142,7 @@ export function SourcesPanel() {
                     checked={s.enabled}
                     disabled={busy === s.id}
                     onChange={(e) => void toggleEnabled(s.id, e.target.checked)}
-                    className="h-4 w-4 accent-rose-500"
+                    className="h-4 w-4 accent-accent-hi"
                   />
                   <span className="text-sm">Enabled</span>
                 </label>
@@ -159,7 +159,7 @@ export function SourcesPanel() {
                     : `${s.type}${s.config.base ? ` · ${s.config.base}` : ''}`}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   disabled={busy === s.id}
@@ -191,7 +191,7 @@ export function SourcesPanel() {
               </div>
             </div>
             {health && !health.ok && (
-              <p className="mt-2 text-sm text-red-300">{health.error}</p>
+              <p className="mt-2 text-sm break-words text-red-300">{health.error}</p>
             )}
             {editing === s.id && (
               <div className="mt-3 space-y-2">

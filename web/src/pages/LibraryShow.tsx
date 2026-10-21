@@ -97,7 +97,7 @@ export function LibraryShow() {
                   </span>
                 )}
                 <span className="shrink-0 text-xs text-muted">{fmtMB(ep.size)}</span>
-                <span className="shrink-0 text-sm font-semibold text-accent-hi">Play</span>
+                <span className="shrink-0 text-sm font-semibold text-accent-text">Play</span>
               </Link>
               {ep.progress && !ep.progress.completed && ep.progress.duration > 0 && (
                 <div

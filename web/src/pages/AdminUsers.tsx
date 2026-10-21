@@ -148,7 +148,7 @@ function UserTableRow({
           <UserInitial username={user.username} className="h-8 w-8 text-sm" />
           <Link
             to={`/admin/users/${user.id}`}
-            className="font-semibold text-white underline-offset-4 hover:text-accent-hi hover:underline"
+            className="font-semibold text-white underline-offset-4 hover:text-accent-text hover:underline"
           >
             {user.username}
           </Link>
@@ -198,7 +198,7 @@ function UserCard({
           <UserInitial username={user.username} className="h-10 w-10 text-base" />
           <div className="min-w-0">
             <p className="flex min-w-0 items-center">
-              <Link to={`/admin/users/${user.id}`} className="inline-flex min-h-11 max-w-full items-center truncate font-semibold text-white hover:text-accent-hi">
+              <Link to={`/admin/users/${user.id}`} className="inline-flex min-h-11 max-w-full items-center truncate font-semibold text-white hover:text-accent-text">
                 {user.username}
               </Link>
               {isSelf && <SelfMark />}

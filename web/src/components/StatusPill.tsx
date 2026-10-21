@@ -3,7 +3,7 @@ import { fmtPercent } from '../lib/format'
 
 const styles: Record<DownloadStatus | 'downloaded', string> = {
   queued: 'bg-line text-white/80',
-  downloading: 'bg-accent/20 text-accent-hi',
+  downloading: 'bg-accent/20 text-accent-text',
   paused: 'bg-amber-400/15 text-amber-300',
   completed: 'bg-emerald-500/15 text-emerald-300',
   failed: 'bg-red-500/20 text-red-300',

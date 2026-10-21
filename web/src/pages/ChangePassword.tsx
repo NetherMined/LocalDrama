@@ -5,7 +5,7 @@ import { errorMessage } from '../lib/format'
 import { useStatus } from '../status'
 
 const inputClass =
-  'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500'
+  'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-accent-hi'
 
 export function ChangePassword() {
   const navigate = useNavigate()
@@ -110,7 +110,7 @@ export function ChangePassword() {
         <button
           type="submit"
           disabled={submitting || !current || !next || !confirm}
-          className="w-full rounded-md bg-rose-600 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
+          className="w-full rounded-md bg-gradient-to-r from-accent to-accent-hi py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
         >
           {submitting ? 'Saving…' : 'Save new password'}
         </button>

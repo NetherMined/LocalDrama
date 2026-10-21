@@ -120,7 +120,7 @@ export function Setup() {
   return (
     <div>
       <header className="mb-8">
-        <p className="text-sm font-semibold tracking-widest text-accent-hi uppercase">Welcome to Dramabox</p>
+        <p className="text-sm font-semibold tracking-widest text-accent-text uppercase">Welcome to Dramabox</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Let's set things up</h1>
         {status?.mock && (
           <p className="mt-2 text-sm text-amber-300">Running in mock mode: downloads use sample data.</p>

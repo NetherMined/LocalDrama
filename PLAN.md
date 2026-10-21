@@ -567,3 +567,72 @@ and rank (phrase match first, then number of words matched), drop actor entries.
 DramaBox results for multi-word queries; single-word queries stay at ≤ 12 (upstream limit).
 
 Each phase stops for confirmation before the next.
+
+---
+
+# Ticket: 34 platforms, VIP accounts, mobile layout, free-tier rules + rewards (2026-10-21)
+
+## Findings
+- `api.dramabuzz.sbs/api/status` lists 44 platforms (34 active, 10 maintenance/coming) and serves an official
+  logo for each (`api.dramabuzz.sbs/logos/<id>.png`). DramaUs supports 22; **missing active ones**: FreeReels,
+  FunDrama, MicroDrama (drakula.goodbos.online/*-api.html), BiliTV, Stardusttv2, ShortsWave, DramaNova, CubeTV,
+  HappyShort, PineDrama, RaptDrama, BonusTV (each documented at its goodbos `api.html`).
+- Accounts: Admin, Laurie, Kathleen, Cheryl, all `tier = free`; `tiers.js` (pulled) marks every platform premium
+  and isn't wired in. A direct live-DB write was blocked by the permission system, so VIP is set via a startup
+  migration / the Users page instead.
+- Mobile (screenshots at 375×812 / 812×375): nothing overflows, but the hero fills the whole first screen
+  (huge title + three stacked tiles), the header search is squashed to "Searc", landscape phones get the
+  desktop layout (giant hero title over the poster, hero = full height), and the Dramora purple logo clashes
+  with leftover red accents.
+
+## Free-tier model (from the user; numbers are defaults, all admin-editable in Settings → Free plan)
+- **VIP platforms**: the main/popular sources are VIP-only: DramaBox, ReelShort, ShortMax, NetShort, DramaWave,
+  GoodShort (admin toggles any platform Free/VIP). Other platforms are free.
+- **Popular series are VIP** even on free platforms: a series is VIP when it is in the top 20 % by play count of
+  its platform (or above an absolute play-count threshold), recomputed daily.
+- **Welcome gift**: every new free account gets one random full VIP series unlocked permanently (plus one more
+  every 7 days of activity).
+- **Daily login reward** (once per calendar day, on first sign-in/visit): random pick of
+  (a) +20 points, (b) unlock the next 5 locked episodes of a series you're watching, (c) unlock a random full
+  series from your My List / recommendations; streak bonus +10 points on day 7.
+- **Share reward**: sharing a series via the Share button (native share sheet completed, or link copied)
+  gives +10 points, max 3 times a day; +25 more when someone else opens the shared link and signs in.
+- **Points shop**: unlock a series (100 pts; 60 for series on your My List), unlock a VIP platform for 24 h
+  (300 pts), unlock the next 5 episodes (40 pts).
+- **VIP**: set by an admin (Users page: Free/VIP switch + optional expiry date); free users see "Ask your admin
+  for VIP". No payments.
+- Enforcement is server-side (stream URL, HLS proxy, downloads stay admin-only); the UI only reflects it.
+
+## Phase 1: Mobile layout + consistent Dramora theme
+1. Phones: compact hero (≤ 60 % of the viewport: poster backdrop, title text-3xl line-clamp-2, Play / More Info,
+   quick tiles become a horizontal chip row); header search collapses to an icon on < sm (tab bar Search opens
+   a full-screen search sheet); 2.5 cards visible per row.
+2. Short screens (`max-height: 500px`, landscape phones/TVs): hero shrinks to a banner, nav single-line, player
+   page uses the full height, tab bar hidden in landscape (side nav or top links instead).
+3. Unify accents to the Dramora palette (theme tokens only; replace hard-coded rose/red classes).
+4. Re-audit every page at 320/375/414 portrait, 667×375/812×375 landscape, 768, 1024; fix and re-check.
+
+## Phase 2: Official logos + the 12 missing platforms
+1. Download all 44 official logos from the API into `web/public/platforms/` (replacing the 8 found earlier
+   and the monograms).
+2. Read each missing platform's `api.html`, add adapters (reuse generic/api/core patterns), add them to the
+   platform list (disabled by default, toggle in Settings), health-test all 34, report which work.
+
+## Phase 3: Tiers + entitlements (server)
+1. Accounts: `tier` ('free' | 'vip'), `vipUntil`; one-time migration: accounts that existed before tiers
+   (Admin, Laurie, Kathleen, Cheryl) → VIP. Users page: Free/VIP switch + expiry.
+2. `plan` settings (VIP platforms, popularity rule, rewards, prices) with the defaults above.
+3. `unlocks(accountId, kind 'series'|'episodes'|'platform', ref, fromEp, toEp, expiresAt, reason)` and an
+   `entitlements.canWatch(account, show, episodeIndex)` → `{ ok, reason, unlock options }`; enforced in the
+   stream/HLS endpoints; browse/search/home responses carry `access: 'free'|'vip'|'unlocked'` per show.
+
+## Phase 4: Points, rewards, sharing (server)
+Points ledger, daily reward claim + streak, welcome gift, share tracking (`/s/<code>` short links that credit
+the sharer when opened by another signed-in account), shop purchases, notifications for rewards.
+
+## Phase 5: Free experience (web)
+VIP badges/locks on cards and episode tiles, locked-episode screen in the player with unlock options
+(points / reward / ask admin), a Rewards page (balance, daily claim, streak, history, shop), points in the
+avatar menu, admin Settings → Free plan editor, Users page tier controls.
+
+Each phase stops for confirmation before the next.

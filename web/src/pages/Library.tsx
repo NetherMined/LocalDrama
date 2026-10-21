@@ -70,7 +70,7 @@ export function Library() {
       {!error && shows === null && <GridSkeleton />}
       {shows && shows.length === 0 && (
         <EmptyState title="Your library is empty">
-          <Link to="/" className="text-accent-hi underline underline-offset-4">
+          <Link to="/" className="text-accent-text underline underline-offset-4">
             Browse dramas
           </Link>{' '}
           and download episodes to see them here.

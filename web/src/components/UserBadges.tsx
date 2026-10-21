@@ -3,7 +3,7 @@ import type { AdminAccount } from '../api'
 export function RoleBadge({ role }: { role: AdminAccount['role'] }) {
   if (role === 'admin') {
     return (
-      <span className="inline-flex rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-accent-hi uppercase">
+      <span className="inline-flex rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-accent-text uppercase">
         Admin
       </span>
     )

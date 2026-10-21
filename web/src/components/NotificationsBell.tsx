@@ -137,7 +137,7 @@ export function NotificationsBell() {
         {unread > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] leading-none font-bold text-white ring-2 ring-black"
+            className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent-hi px-1 text-[10px] leading-none font-bold text-white ring-2 ring-black"
           >
             {unread > 9 ? '9+' : unread}
           </span>
@@ -157,7 +157,7 @@ export function NotificationsBell() {
               type="button"
               onClick={() => void markAll()}
               disabled={markingAll || unread === 0}
-              className="text-xs font-semibold text-accent-hi transition hover:text-white disabled:text-muted disabled:opacity-60"
+              className="text-xs font-semibold text-accent-text transition hover:text-white disabled:text-muted disabled:opacity-60"
             >
               Mark all read
             </button>
@@ -212,7 +212,7 @@ function NotificationRow({ notification: n, onOpen }: { notification: AppNotific
     <>
       <span
         aria-label={unread ? 'Unread' : undefined}
-        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? 'bg-rose-600' : 'bg-transparent'}`}
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? 'bg-accent-hi' : 'bg-transparent'}`}
       />
       <span className="min-w-0 flex-1">
         <span className={`block text-sm ${unread ? 'font-semibold text-white' : 'text-white/80'}`}>{n.title}</span>
