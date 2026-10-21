@@ -8,12 +8,10 @@ import DramaboxClient from '@zhadev/dramabox';
 import { getConfig, saveConfig } from '../config.js';
 import { httpError } from '../errors.js';
 import { buildAgent, getProxyUrl, maskProxyUrl, parseProxyUrl, setProxy } from '../proxy.js';
-import { maskSecret, normalizeUrl, resolveSecret } from '../integrations.js';
 import { isWindowsPath } from '../paths.js';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'));
 export const VERSION = pkg.version;
-const PLEX_SECTION_RE = /^\d*$/;
 
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -118,51 +116,12 @@ function parseSettings(body, { requireLanguage }) {
   return patch;
 }
 
-function parseIntegrations(input, current) {
-  if (!input || typeof input !== 'object') throw httpError(400, 'integrations must be an object');
-  const next = structuredClone(current);
-  if (input.jellyfin !== undefined) {
-    const j = input.jellyfin ?? {};
-    next.jellyfin = {
-      enabled: j.enabled === undefined ? current.jellyfin.enabled : !!j.enabled,
-      url: j.url === undefined ? current.jellyfin.url : normalizeUrl(j.url),
-      apiKey: resolveSecret(j.apiKey, current.jellyfin.apiKey),
-    };
-    if (next.jellyfin.enabled && !next.jellyfin.url) throw httpError(400, 'Jellyfin URL is required when enabled');
-  }
-  if (input.plex !== undefined) {
-    const p = input.plex ?? {};
-    const sectionId = p.sectionId === undefined ? current.plex.sectionId : String(p.sectionId ?? '').trim();
-    if (!PLEX_SECTION_RE.test(sectionId)) throw httpError(400, 'Plex section id must be numeric');
-    next.plex = {
-      enabled: p.enabled === undefined ? current.plex.enabled : !!p.enabled,
-      url: p.url === undefined ? current.plex.url : normalizeUrl(p.url),
-      token: resolveSecret(p.token, current.plex.token),
-      sectionId,
-    };
-    if (next.plex.enabled && !next.plex.url) throw httpError(400, 'Plex URL is required when enabled');
-  }
-  return next;
-}
-
 function publicConfig(ctx) {
   const { passwordHash, integrations, ...rest } = getConfig();
-  const jf = integrations.jellyfin;
-  const px = integrations.plex;
   return {
     ...rest,
     proxyUrl: maskProxyUrl(rest.proxyUrl),
     hasPassword: ctx.accounts.hasPassword(),
-    integrations: {
-      jellyfin: { enabled: jf.enabled, url: jf.url, apiKey: maskSecret(jf.apiKey), lastResult: ctx.integrations.lastResult('jellyfin') },
-      plex: {
-        enabled: px.enabled,
-        url: px.url,
-        token: maskSecret(px.token),
-        sectionId: px.sectionId,
-        lastResult: ctx.integrations.lastResult('plex'),
-      },
-    },
   };
 }
 
@@ -308,9 +267,6 @@ export function registerSystemRoutes(app, ctx) {
       const check = await checkWritableDir(body.downloadRoot);
       if (!check.ok) throw httpError(400, check.error);
       patch.downloadRoot = check.resolved;
-    }
-    if (body.integrations !== undefined) {
-      patch.integrations = parseIntegrations(body.integrations, getConfig().integrations);
     }
     if (body.password !== undefined) {
       if (typeof body.password !== 'string' || body.password === '') {

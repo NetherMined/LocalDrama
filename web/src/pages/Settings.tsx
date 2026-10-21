@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { api, type Config, type Language, type PathValidation, type SettingsPatch } from '../api'
 import { LanUrlRow } from '../components/LanUrlRow'
-import { MediaServers } from '../components/MediaServers'
 import { SourcesPanel } from '../components/SourcesPanel'
 import { SystemHealth } from '../components/SystemHealth'
 import { ErrorPanel, NoticeText, PageHeader, Section, Spinner, buttonClass, inputClass, type Notice } from '../components/ui'
@@ -442,12 +441,10 @@ function SettingsPage() {
             />
             Advertise on network (mDNS)
           </label>
-          <p className="text-xs text-muted">Lets devices on this network find the server as "LocalDrama Server" without typing an address.</p>
+          <p className="text-xs text-muted">Lets devices on this network find the server as "Dramora Server" without typing an address.</p>
           {mdnsNotice && <NoticeText notice={mdnsNotice} />}
         </div>
       </Section>
-
-      <MediaServers integrations={current.integrations} onChanged={(cfg) => setConfig(cfg)} />
 
       <Section id="library" title="Library" description="Re-read the download folder to pick up or remove episodes.">
         <div className="flex flex-wrap items-center gap-4">

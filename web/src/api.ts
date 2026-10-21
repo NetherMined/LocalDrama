@@ -111,40 +111,6 @@ export interface ContinueItem {
   duration: number
 }
 
-export interface IntegrationResult {
-  ok: boolean
-  at: number | string
-  error?: string
-}
-
-export interface JellyfinIntegration {
-  enabled: boolean
-  url: string
-  apiKey: string
-  lastResult: IntegrationResult | null
-}
-
-export interface PlexIntegration {
-  enabled: boolean
-  url: string
-  token: string
-  sectionId: string
-  lastResult: IntegrationResult | null
-}
-
-export interface Integrations {
-  jellyfin: JellyfinIntegration
-  plex: PlexIntegration
-}
-
-export interface IntegrationTest {
-  ok: boolean
-  error?: string
-  name?: string
-  version?: string
-  sections?: { id: number | string; title: string }[]
-}
-
 export interface Health {
   ok: boolean
   version: string
@@ -190,17 +156,10 @@ export interface Config {
   configured: boolean
   hasPassword: boolean
   mdns: boolean
-  integrations: Integrations
 }
 
-export interface IntegrationsPatch {
-  jellyfin?: Partial<Omit<JellyfinIntegration, 'lastResult'>>
-  plex?: Partial<Omit<PlexIntegration, 'lastResult'>>
-}
-
-export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword' | 'integrations'>> & {
+export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword'>> & {
   password?: string
-  integrations?: IntegrationsPatch
 }
 
 export interface SetupInput {
@@ -676,11 +635,6 @@ export const api = {
     const blob = new Blob([JSON.stringify({ position, duration, source })], { type: 'application/json' })
     return navigator.sendBeacon(watchPath(bookId, index), blob)
   },
-
-  testIntegration: (type: 'jellyfin' | 'plex', input: { url?: string; apiKey?: string; token?: string }) =>
-    request<IntegrationTest>('/api/integrations/test', { method: 'POST', body: { type, ...input } }),
-  refreshIntegration: (type: 'jellyfin' | 'plex') =>
-    request<{ ok: boolean; error?: string }>('/api/integrations/refresh', { method: 'POST', body: { type } }),
 
   health: () => request<Health>('/api/health'),
 
