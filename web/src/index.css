@@ -2,13 +2,13 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --color-ink: #050505;
-  --color-panel: #15151c;
-  --color-panel-2: #1d1d27;
-  --color-line: #2c2c38;
-  --color-muted: #9d9daf;
-  --color-accent: #e11d48;
-  --color-accent-hi: #fb7185;
+  --color-ink: #0A0A0F;
+  --color-panel: #16161F;
+  --color-panel-2: #1E1E2A;
+  --color-line: #2A2A38;
+  --color-muted: #9CA3AF;
+  --color-accent: #7C3AED;
+  --color-accent-hi: #C026D3;
 }
 
 @layer base {
@@ -22,7 +22,7 @@
     margin: 0;
     min-height: 100vh;
     background-color: var(--color-ink);
-    color: #f4f4f7;
+    color: #FAFAFA;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }

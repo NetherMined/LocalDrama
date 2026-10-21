@@ -101,8 +101,19 @@ export function Nav() {
       }`}
     >
       <div className="flex items-center gap-3 px-4 pt-3 sm:gap-4 sm:px-6 lg:px-10">
-        <Link to="/" className="inline-flex min-h-11 shrink-0 items-center rounded text-lg font-black tracking-tight text-rose-600 sm:text-xl">
-          DRAMAUS
+        <Link to="/" className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded">
+          <svg className="h-7 w-7" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#7C3AED" />
+                <stop offset="100%" stopColor="#C026D3" />
+              </linearGradient>
+            </defs>
+            <polygon points="8,6 26,16 8,26" fill="url(#logo-grad)" />
+          </svg>
+          <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-lg font-black tracking-tight text-transparent sm:text-xl">
+            Dramora
+          </span>
         </Link>
         {status?.mock && (
           <span className="hidden rounded border border-amber-400/50 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300 sm:inline-block">

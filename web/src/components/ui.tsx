@@ -4,8 +4,8 @@ import { isRegionBlocked } from '../lib/format'
 export function buttonClass(variant: 'primary' | 'ghost' | 'danger' = 'primary'): string {
   const base =
     'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40'
-  if (variant === 'primary') return `${base} bg-accent text-white hover:bg-rose-500`
-  if (variant === 'danger') return `${base} border border-line bg-panel-2 text-white hover:border-accent-hi`
+  if (variant === 'primary') return `${base} bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-500 hover:to-fuchsia-500`
+  if (variant === 'danger') return `${base} border border-line bg-panel-2 text-white hover:border-fuchsia-400`
   return `${base} border border-line bg-panel-2 text-white hover:bg-line`
 }
 
@@ -54,8 +54,8 @@ export function ErrorPanel({
   onRetry?: () => void
 }) {
   return (
-    <div role="alert" className="rounded-lg border border-accent/40 bg-accent/10 p-5">
-      <h2 className="text-base font-semibold text-accent-hi">{title}</h2>
+    <div role="alert" className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/10 p-5">
+      <h2 className="text-base font-semibold text-fuchsia-300">{title}</h2>
       <p className="mt-1 text-sm whitespace-pre-line text-white/90">{message}</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className={`${buttonClass('ghost')} mt-4`}>
@@ -100,7 +100,7 @@ export function PageHeader({ title, children }: { title: string; children?: Reac
 export function Spinner({ label = 'Loading' }: { label?: string }) {
   return (
     <div role="status" className="flex items-center gap-3 py-8 text-sm text-muted">
-      <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-accent-hi" aria-hidden="true" />
+      <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-fuchsia-400" aria-hidden="true" />
       {label}
     </div>
   )
@@ -129,7 +129,7 @@ export function LoadError({ message, title, onRetry }: { message: string; title?
   return <ErrorPanel message={message} title={title} onRetry={onRetry} />
 }
 
-export const inputClass = 'mt-2 w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus:border-accent-hi'
+export const inputClass = 'mt-2 w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus:border-fuchsia-400'
 
 export interface Notice {
   kind: 'ok' | 'err'
