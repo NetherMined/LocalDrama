@@ -107,11 +107,19 @@ export function SearchIcon({ className = 'h-5 w-5' }: IconProps) {
   )
 }
 
-export function BellIcon({ className = 'h-5 w-5' }: IconProps) {
+export function BellIcon({ className = 'h-5 w-5', filled = false }: IconProps & { filled?: boolean }) {
   return (
-    <svg {...common} className={className}>
+    <svg {...common} fill={filled ? 'currentColor' : 'none'} className={className}>
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </svg>
+  )
+}
+
+export function HeartIcon({ className = 'h-5 w-5', filled = false }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...common} fill={filled ? 'currentColor' : 'none'} className={className}>
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.9 1-1.1a5.5 5.5 0 0 0 0-7.7z" />
     </svg>
   )
 }

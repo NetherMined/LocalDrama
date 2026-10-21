@@ -12,6 +12,7 @@ const MARK_READ_DELAY_MS = 1500
 const rowClass = 'flex items-start gap-3 rounded-md px-3 py-2.5 transition hover:bg-panel-2'
 
 function linkFor(n: AppNotification): string | null {
+  if (n.link) return n.link
   if (n.kind === 'welcome' || n.kind === 'password_reset') return '/account'
   if (n.kind === 'new_device') return '/account#devices'
   return null

@@ -123,6 +123,21 @@ CREATE TABLE IF NOT EXISTS favourites (
   createdAt TEXT NOT NULL,
   PRIMARY KEY (profileId, bookId)
 );
+CREATE TABLE IF NOT EXISTS likes (
+  accountId INTEGER NOT NULL,
+  bookId TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  PRIMARY KEY (accountId, bookId)
+);
+CREATE TABLE IF NOT EXISTS follows (
+  accountId INTEGER NOT NULL,
+  bookId TEXT NOT NULL,
+  sourceId TEXT,
+  knownEpisodes INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  checkedAt TEXT,
+  PRIMARY KEY (accountId, bookId)
+);
 `;
 
 const ADDED_COLUMNS = {
@@ -144,6 +159,9 @@ const ADDED_COLUMNS = {
   },
   progress: {
     watchedSeconds: 'REAL NOT NULL DEFAULT 0',
+  },
+  notifications: {
+    link: 'TEXT',
   },
 };
 

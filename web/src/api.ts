@@ -41,6 +41,13 @@ export interface AppNotification {
   body: string
   createdAt: string
   readAt: string | null
+  link?: string | null
+}
+
+export interface ShowSocial {
+  likes: number
+  liked: boolean
+  following: boolean
 }
 
 export interface StreamProgress {
@@ -596,6 +603,15 @@ export const api = {
   suggest: (q: string) => request<SearchSuggestions>(`/api/search/suggest?q=${enc(q)}`),
   show: (bookId: string, source?: string) =>
     request<ShowDetail>(`/api/shows/${enc(bookId)}${source ? `?source=${enc(source)}` : ''}`),
+
+  social: (bookId: string) => request<ShowSocial>(`/api/shows/${enc(bookId)}/social`),
+  setLike: (bookId: string, liked: boolean) =>
+    request<ShowSocial>(`/api/shows/${enc(bookId)}/like`, { method: liked ? 'PUT' : 'DELETE' }),
+  setFollow: (bookId: string, following: boolean, source?: string) =>
+    request<ShowSocial>(`/api/shows/${enc(bookId)}/follow`, {
+      method: following ? 'PUT' : 'DELETE',
+      body: following ? { source: source ?? null } : undefined,
+    }),
 
   favourites: () => request<{ items: Show[] }>('/api/favourites'),
   addFavourite: (bookId: string) => request<{ ok: true }>(`/api/favourites/${enc(bookId)}`, { method: 'POST' }),

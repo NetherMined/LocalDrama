@@ -33,6 +33,8 @@ import { registerSourceRoutes } from './routes/sources.js';
 import { registerFavouriteRoutes } from './routes/favourites.js';
 import { registerHlsRoutes } from './routes/hls.js';
 import { registerClientLogRoutes } from './routes/clientLog.js';
+import { registerSocialRoutes } from './routes/social.js';
+import { createFollowChecker } from './follows.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = path.resolve(HERE, '..', '..', 'web', 'dist');
@@ -73,6 +75,7 @@ const profiles = createProfiles(db);
 const progress = createProgress({ db });
 const integrations = createIntegrations({ getConfig, log: app.log });
 const mdns = createMdns({ getConfig, port: PORT, version: VERSION, log: app.log });
+const follows = createFollowChecker({ db, provider, accounts, log: app.log });
 const library = createLibrary({ db, getConfig, events });
 const downloads = createDownloadManager({ db, provider, events, getConfig, library, integrations });
 downloads.init();
@@ -88,6 +91,7 @@ const ctx = {
   profiles,
   progress,
   integrations,
+  follows,
   mdns,
   port: PORT,
   mock: MOCK,
@@ -144,6 +148,7 @@ registerHomeRoutes(app, ctx);
 registerDownloadRoutes(app, ctx);
 registerLibraryRoutes(app, ctx);
 registerFavouriteRoutes(app, ctx);
+registerSocialRoutes(app, ctx);
 registerClientLogRoutes(app);
 app.get('/api/events', (req, reply) => {
   events.subscribe(req, reply);
@@ -200,6 +205,7 @@ if (!hasWebDist) app.log.warn('web/dist not found; UI is not being served');
 
 mdns.sync();
 downloads.kick();
+follows.start();
 
 let stopping = false;
 for (const signal of ['SIGINT', 'SIGTERM']) {

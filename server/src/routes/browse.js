@@ -298,6 +298,8 @@ export function registerBrowseRoutes(app, ctx) {
       };
     });
 
+    ctx.follows?.checkBook(bookId, episodes.length);
+
     return { show, source: sourceId ?? show?.source ?? null, episodes };
   });
 

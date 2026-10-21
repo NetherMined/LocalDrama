@@ -101,7 +101,9 @@ export function createAccounts(db, { events }) {
     updateDevice: raw.prepare('UPDATE devices SET name = ?, userAgent = ?, ip = ?, lastSeenAt = ? WHERE id = ? AND accountId = ?'),
     deleteDevice: raw.prepare('DELETE FROM devices WHERE id = ? AND accountId = ?'),
     deleteDevices: raw.prepare('DELETE FROM devices WHERE accountId = ?'),
-    insertNotification: raw.prepare('INSERT INTO notifications (accountId, kind, title, body, createdAt) VALUES (?, ?, ?, ?, ?)'),
+    insertNotification: raw.prepare('INSERT INTO notifications (accountId, kind, title, body, createdAt, link) VALUES (?, ?, ?, ?, ?, ?)'),
+    deleteLikes: raw.prepare('DELETE FROM likes WHERE accountId = ?'),
+    deleteFollows: raw.prepare('DELETE FROM follows WHERE accountId = ?'),
     notifications: raw.prepare('SELECT * FROM notifications WHERE accountId = ? ORDER BY id DESC LIMIT ?'),
     unread: raw.prepare('SELECT COUNT(*) AS n FROM notifications WHERE accountId = ? AND readAt IS NULL'),
     markAllRead: raw.prepare('UPDATE notifications SET readAt = ? WHERE accountId = ? AND readAt IS NULL'),
@@ -127,8 +129,8 @@ export function createAccounts(db, { events }) {
     if (found && found.id !== exceptId) throw httpError(409, 'That username is taken');
   }
 
-  function addNotification(accountId, kind, title, body = '') {
-    stmts.insertNotification.run(accountId, kind, title, body, new Date().toISOString());
+  function addNotification(accountId, kind, title, body = '', link = null) {
+    stmts.insertNotification.run(accountId, kind, title, body, new Date().toISOString(), link);
     events?.emit('notification', { type: 'notification' });
   }
 
@@ -314,6 +316,8 @@ export function createAccounts(db, { events }) {
         stmts.deleteAccountSessions.run(id);
         stmts.deleteDevices.run(id);
         stmts.deleteNotifications.run(id);
+        stmts.deleteLikes.run(id);
+        stmts.deleteFollows.run(id);
         stmts.deleteAccount.run(id);
       })();
       return { ok: true };
@@ -374,8 +378,11 @@ export function createAccounts(db, { events }) {
         body: n.body,
         createdAt: n.createdAt,
         readAt: n.readAt ?? null,
+        link: n.link ?? null,
       }));
     },
+
+    notify: addNotification,
 
     unreadCount(accountId) {
       return stmts.unread.get(accountId).n;

@@ -45,6 +45,8 @@ export interface PlayerShellProps {
   poster?: string
   /** Keep the player on screen before anything is loaded (downloads page). */
   alwaysVisible?: boolean
+  /** Portrait 9:16 frame capped at 70vh and centred, for vertical drama posters. */
+  portrait?: boolean
   /** Context for playback diagnostics sent to the server log. */
   telemetry?: { platform?: string; bookId: string }
 }
@@ -154,6 +156,7 @@ export function PlayerShell({
   showTitle,
   poster,
   alwaysVisible = false,
+  portrait = false,
   telemetry,
 }: PlayerShellProps) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -723,7 +726,9 @@ export function PlayerShell({
       className={
         fullscreen
           ? 'relative h-full w-full bg-black outline-none'
-          : 'relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 outline-none'
+          : portrait
+            ? 'relative mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 outline-none'
+            : 'relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/70 outline-none'
       }
     >
       <video

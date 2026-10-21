@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail, type StreamProgress } from '../api'
+import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail, type ShowSocial, type StreamProgress } from '../api'
 import { useDownloads } from '../downloads'
 import { useStatus } from '../status'
 import { PlayerShell, type PlayerEpisode, type PlayerHandle, type PlayerSample, type ResolvedSource } from '../components/PlayerShell'
 import { StatusPill } from '../components/StatusPill'
-import { CheckIcon, PlayIcon } from '../components/icons'
+import { BellIcon, CheckIcon, ChevronRightIcon, HeartIcon, MoreVerticalIcon, PlayIcon, PlusIcon, ShareIcon } from '../components/icons'
 import { PlatformLogo } from '../components/PlatformLogo'
-import { Poster, LoadError, buttonClass } from '../components/ui'
-import { errorMessage, fmtEpisode, fmtMinutesLeft, isGenericEpisodeName } from '../lib/format'
+import { Modal } from '../components/Modal'
+import { Toast, useToast } from '../components/Toast'
+import { LoadError } from '../components/ui'
+import { errorMessage, isGenericEpisodeName } from '../lib/format'
 
 type Display = 'none' | DownloadStatus | 'downloaded'
 
@@ -20,6 +22,8 @@ interface DisplayInfo {
 }
 
 const RESUME_MIN_SECONDS = 5
+const RANGE_SIZE = 50
+const PINK = '#f0436a'
 
 export function Show() {
   const { bookId = '' } = useParams()
@@ -36,11 +40,19 @@ export function Show() {
   const [attempt, setAttempt] = useState(0)
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
+  const [social, setSocial] = useState<ShowSocial | null>(null)
+  const [socialPending, setSocialPending] = useState<'like' | 'follow' | null>(null)
   const [progressByEp, setProgressByEp] = useState<Map<number, StreamProgress>>(() => new Map())
   const [progressReady, setProgressReady] = useState(false)
   const [currentKey, setCurrentKey] = useState<string | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [rangeStart, setRangeStart] = useState<number | null>(null)
+  const [allOpen, setAllOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [toast, notify] = useToast()
   const playerRef = useRef<PlayerHandle>(null)
+  const allButtonRef = useRef<HTMLButtonElement>(null)
   const epParam = searchParams.get('ep')
   const autoOpened = useRef<string | null>(null)
   const currentBook = useRef(bookId)
@@ -61,6 +73,12 @@ export function Show() {
     setProgressByEp(new Map())
     setProgressReady(false)
     setCurrentKey(null)
+    setPlaying(false)
+    setRangeStart(null)
+    setAllOpen(false)
+    setMoreOpen(false)
+    setExpanded(false)
+    setSocial(null)
     api
       .watchProgress(bookId)
       .then((res) => {
@@ -84,6 +102,7 @@ export function Show() {
         if (!cancelled) setLoading(false)
       })
     api.isFavourite(bookId).then((r) => { if (!cancelled) setIsFav(r.favourite) }).catch(() => undefined)
+    api.social(bookId).then((r) => { if (!cancelled) setSocial(r) }).catch(() => undefined)
     return () => {
       cancelled = true
     }
@@ -128,20 +147,64 @@ export function Show() {
   }
 
   async function toggleFavourite() {
+    const prev = isFav
     setFavBusy(true)
+    setIsFav(!prev)
     try {
-      if (isFav) {
-        await api.removeFavourite(bookId)
-        setIsFav(false)
-      } else {
-        await api.addFavourite(bookId)
-        setIsFav(true)
-      }
+      if (prev) await api.removeFavourite(bookId)
+      else await api.addFavourite(bookId)
     } catch (err) {
-      setNotice({ kind: 'err', text: errorMessage(err) })
+      setIsFav(prev)
+      notify(errorMessage(err), 'err')
     } finally {
       setFavBusy(false)
     }
+  }
+
+  async function toggleLike() {
+    if (!social) return
+    const prev = social
+    const liked = !prev.liked
+    setSocialPending('like')
+    setSocial({ ...prev, liked, likes: Math.max(0, prev.likes + (liked ? 1 : -1)) })
+    try {
+      setSocial(await api.setLike(bookId, liked))
+    } catch (err) {
+      setSocial(prev)
+      notify(errorMessage(err), 'err')
+    } finally {
+      setSocialPending(null)
+    }
+  }
+
+  async function toggleFollow() {
+    if (!social) return
+    const prev = social
+    const following = !prev.following
+    setSocialPending('follow')
+    setSocial({ ...prev, following })
+    try {
+      setSocial(await api.setFollow(bookId, following, show?.source ?? source))
+    } catch (err) {
+      setSocial(prev)
+      notify(errorMessage(err), 'err')
+    } finally {
+      setSocialPending(null)
+    }
+  }
+
+  async function share() {
+    const url = window.location.href
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, text: `${title} · Episode ${selectedNumber}`, url })
+        return
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+      }
+    }
+    if (await copyText(url)) notify('Link copied', 'ok')
+    else notify('Could not copy the link', 'err')
   }
 
   // Resumes an unfinished episode from where it was left; a few seconds in is not worth resuming.
@@ -167,11 +230,13 @@ export function Show() {
   function playEpisode(index: number, fullscreen = true) {
     const key = String(index)
     setCurrentKey(key)
+    setPlaying(true)
     playerRef.current?.play(key, { fullscreen })
   }
 
   function onPlayerChange(key: string) {
     setCurrentKey(key)
+    setPlaying(true)
     autoOpened.current = `${bookId}:${key}`
     setSearchParams(
       (prev) => {
@@ -184,6 +249,7 @@ export function Show() {
   }
 
   function onPlayerClose() {
+    setPlaying(false)
     if (!searchParams.has('ep')) return
     setSearchParams(
       (prev) => {
@@ -228,12 +294,17 @@ export function Show() {
   if (loading) {
     return (
       <div className="animate-pulse" aria-busy="true" aria-label="Loading drama">
-        <div className="flex flex-col gap-6 sm:flex-row">
-          <div className="aspect-[3/4] w-40 rounded-md bg-panel-2 sm:w-56" />
-          <div className="flex-1 space-y-3">
+        <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-10">
+          <div className="mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] rounded-lg bg-panel-2" />
+          <div className="mt-6 space-y-3 lg:mt-0">
+            <div className="h-4 w-1/2 rounded bg-panel-2" />
             <div className="h-8 w-2/3 rounded bg-panel-2" />
-            <div className="h-4 w-1/3 rounded bg-panel-2" />
             <div className="h-20 w-full rounded bg-panel-2" />
+            <div className="grid grid-cols-4 gap-2 pt-2">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="mx-auto h-12 w-12 rounded-full bg-panel-2" />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -263,234 +334,477 @@ export function Show() {
   const afterDone =
     doneItem && episodes.some((ep) => ep.index === doneItem.episodeIndex + 1) ? doneItem.episodeIndex + 1 : null
   const firstIndex = episodes[0]?.index ?? 0
-  let primary: { index: number; label: string }
-  if (resumeItem) {
-    const left = resumeItem.duration > 0 ? ` · ${fmtMinutesLeft(resumeItem.position, resumeItem.duration)}` : ''
-    primary = { index: resumeItem.episodeIndex, label: `Resume ${fmtEpisode(resumeItem.episodeIndex)}${left}` }
-  } else if (afterDone !== null) {
-    primary = { index: afterDone, label: `Play ${fmtEpisode(afterDone)}` }
-  } else {
-    primary = { index: firstIndex, label: `Play ${fmtEpisode(firstIndex)}` }
-  }
+  // The episode the page is about: the one playing or last played, else resume / next, else the first.
+  const primaryIndex = resumeItem ? resumeItem.episodeIndex : (afterDone ?? firstIndex)
+  const selectedIndex = currentKey !== null ? Number(currentKey) : primaryIndex
+  const selectedNumber = selectedIndex + 1
 
-  const meta = [
-    ...(show?.tags ?? []).slice(0, 4),
-    `${episodes.length || show?.episodeCount || 0} episodes`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const tags = (show?.tags ?? []).slice(0, 4)
+  const episodeTotal = episodes.length || show?.episodeCount || 0
   const platformId = show?.source ?? source ?? null
 
+  const ranged = episodes.length > RANGE_SIZE
+  const rangeCount = Math.ceil(episodes.length / RANGE_SIZE)
+  const activeRange = ranged ? (rangeStart ?? Math.floor(Math.max(0, selectedIndex) / RANGE_SIZE) * RANGE_SIZE) : 0
+  const visibleEpisodes = ranged ? episodes.slice(activeRange, activeRange + RANGE_SIZE) : episodes
+
   return (
-    <div className="space-y-8">
-      <BackLink />
-
-      <PlayerShell
-        key={`${bookId}:${source ?? ''}`}
-        ref={playerRef}
-        episodes={playerEpisodes}
-        resolve={resolveStream}
-        onSave={(key, sample, beacon) => saveWatch(Number(key), sample, beacon)}
-        onChange={onPlayerChange}
-        onClose={onPlayerClose}
-        showTitle={title}
-        poster={show?.cover}
-        telemetry={{ platform: source, bookId }}
-      />
-
-      <section aria-label="Drama details" className="relative isolate overflow-hidden rounded-xl border border-line bg-panel">
-        {show?.cover && (
-          <img
-            src={show.cover}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 h-full w-full scale-110 object-cover object-top opacity-40 blur-2xl"
-          />
-        )}
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black via-black/80 to-black/50" />
-        <div className="flex flex-col gap-6 p-4 sm:p-6 md:flex-row md:gap-8 lg:p-10">
-          <div className="hidden w-48 shrink-0 md:block lg:w-56">
-            <Poster src={show?.cover} name={title} className="rounded-md shadow-2xl shadow-black/60" />
-          </div>
-          <div className="min-w-0 flex-1 space-y-4">
-            <h1 className="text-3xl leading-tight font-black tracking-tight break-words sm:text-4xl md:text-5xl">
-              {title}
-            </h1>
-            {(meta || show?.sourceName) && (
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-muted">
-                {meta}
-                {show?.sourceName && (
-                  <span className="inline-flex items-center gap-1.5">
-                    {meta && <span aria-hidden="true">·</span>}
-                    <PlatformLogo id={platformId} name={show.sourceName} size={16} decorative />
-                    {show.sourceName}
-                  </span>
+    <>
+      <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start lg:gap-10">
+        <div className="lg:sticky lg:top-24">
+          {!playing && (
+            <div className="relative mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] overflow-hidden rounded-lg bg-black">
+              {show?.cover && (
+                <img
+                  src={show.cover}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+                />
+              )}
+              <div className="absolute inset-0 flex items-center justify-center p-6">
+                {show?.cover ? (
+                  <img
+                    src={show.cover}
+                    alt={title}
+                    className="h-full max-h-full w-auto max-w-full rounded-md object-contain shadow-2xl shadow-black/70"
+                  />
+                ) : (
+                  <p className="text-center text-lg font-bold">{title}</p>
                 )}
-              </p>
-            )}
-            {!show && (
-              <p className="text-sm text-amber-300">Details are not cached for this drama. Episodes are shown below.</p>
-            )}
-            {show?.introduction && (
-              <div className="max-w-3xl">
-                <p
-                  className={`text-sm leading-relaxed text-white/80 sm:text-base ${expanded ? '' : 'line-clamp-3'}`}
+              </div>
+              <button
+                type="button"
+                onClick={() => playEpisode(selectedIndex)}
+                disabled={episodes.length === 0}
+                aria-label={`Play episode ${selectedNumber}`}
+                className="absolute top-1/2 left-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-2xl shadow-black/70 transition hover:scale-105 disabled:opacity-40"
+                style={{ backgroundColor: PINK }}
+              >
+                <PlayIcon className="ml-1 h-9 w-9" />
+              </button>
+            </div>
+          )}
+          <PlayerShell
+            key={`${bookId}:${source ?? ''}`}
+            ref={playerRef}
+            episodes={playerEpisodes}
+            resolve={resolveStream}
+            onSave={(key, sample, beacon) => saveWatch(Number(key), sample, beacon)}
+            onChange={onPlayerChange}
+            onClose={onPlayerClose}
+            showTitle={title}
+            poster={show?.cover}
+            portrait
+            telemetry={{ platform: source, bookId }}
+          />
+        </div>
+
+        <div className="mt-6 min-w-0 space-y-6 lg:mt-0">
+          <nav aria-label="Breadcrumb">
+            <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
+              <li>
+                <Link to="/" className="hover:text-white">
+                  Home
+                </Link>
+              </li>
+              <li aria-hidden="true">/</li>
+              <li className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="max-w-[16rem] truncate text-left hover:text-white"
                 >
+                  {title}
+                </button>
+              </li>
+              <li aria-hidden="true">/</li>
+              <li aria-current="page" className="text-white/40">
+                EP {selectedNumber}
+              </li>
+            </ol>
+          </nav>
+
+          <div className="space-y-2">
+            <h1 className="text-3xl leading-tight font-bold tracking-tight break-words sm:text-4xl">
+              Episode {selectedNumber} · {title}
+            </h1>
+            {show?.introduction && (
+              <div>
+                <h2 className="text-sm font-bold">Episode {selectedNumber} plot</h2>
+                <p className={`mt-1 text-sm leading-relaxed text-white/80 ${expanded ? '' : 'line-clamp-3'}`}>
                   {show.introduction}
                 </p>
                 <button
                   type="button"
                   aria-expanded={expanded}
                   onClick={() => setExpanded((v) => !v)}
-                  className="mt-1 text-sm font-semibold text-rose-300 hover:text-rose-200"
+                  className="mt-1 min-h-11 text-sm font-semibold text-[#f0436a] hover:text-rose-300 sm:min-h-0"
                 >
                   {expanded ? 'Less' : 'More'}
                 </button>
               </div>
             )}
-            <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
-              <button
-                type="button"
-                onClick={() => playEpisode(primary.index)}
-                disabled={episodes.length === 0}
-                className={`${buttonClass()} w-full sm:w-auto`}
-              >
-                <PlayIcon className="h-4 w-4" />
-                {primary.label}
-              </button>
-              <button
-                type="button"
-                onClick={() => void toggleFavourite()}
-                disabled={favBusy}
-                className={`${buttonClass('ghost')} w-full sm:w-auto`}
-              >
-                {isFav ? 'Remove from Favourites' : 'Add to Favourites'}
-              </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => void downloadAll()}
-                  disabled={busy || selectable.length === 0}
-                  className={`${buttonClass('ghost')} w-full sm:w-auto`}
-                >
-                  {busy ? 'Queuing...' : 'Download all'}
-                </button>
-              )}
-            </div>
-            {notice && (
-              <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
-                {notice.text}
+            {!show && <p className="text-sm text-amber-300">Details are not cached for this drama. Episodes are shown below.</p>}
+            {(tags.length > 0 || show?.sourceName || episodeTotal > 0) && (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+                {[...tags, `${episodeTotal} episodes`].map((item, i) => (
+                  <span key={`${item}-${i}`} className="inline-flex items-center gap-2">
+                    {i > 0 && <span aria-hidden="true">·</span>}
+                    {item}
+                  </span>
+                ))}
+                {show?.sourceName && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span aria-hidden="true">·</span>
+                    <PlatformLogo id={platformId} name={show.sourceName} size={16} decorative />
+                    {show.sourceName}
+                  </span>
+                )}
               </p>
             )}
           </div>
+
+          <div className={`grid gap-2 ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} sm:max-w-md`}>
+            <ActionButton
+              label={social && social.likes > 0 ? `Like ${social.likes}` : 'Like'}
+              pressed={social?.liked ?? false}
+              disabled={!social || socialPending === 'like'}
+              onClick={() => void toggleLike()}
+            >
+              <HeartIcon className="h-5 w-5" filled={social?.liked} />
+            </ActionButton>
+            <ActionButton label={isFav ? 'Saved' : 'Save'} pressed={isFav} disabled={favBusy} onClick={() => void toggleFavourite()}>
+              {isFav ? <CheckIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
+            </ActionButton>
+            <ActionButton
+              label={social?.following ? 'Following' : 'Follow'}
+              pressed={social?.following ?? false}
+              disabled={!social || socialPending === 'follow'}
+              onClick={() => void toggleFollow()}
+            >
+              <BellIcon className="h-5 w-5" filled={social?.following} />
+            </ActionButton>
+            <ActionButton label="Share" onClick={() => void share()}>
+              <ShareIcon className="h-5 w-5" />
+            </ActionButton>
+            {isAdmin && (
+              <div className="relative flex flex-col items-center">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((v) => !v)}
+                  className="flex min-h-11 flex-col items-center gap-2 text-xs font-medium text-white/90"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20">
+                    <MoreVerticalIcon className="h-5 w-5" />
+                  </span>
+                  <span>More</span>
+                </button>
+                {moreOpen && (
+                  <div
+                    role="menu"
+                    className="absolute top-full right-0 z-20 mt-2 w-44 rounded-lg border border-line bg-panel-2 p-1 shadow-xl shadow-black/60"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={busy || selectable.length === 0}
+                      onClick={() => {
+                        setMoreOpen(false)
+                        void downloadAll()
+                      }}
+                      className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-line disabled:opacity-40"
+                    >
+                      {busy ? 'Queuing...' : 'Download all'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {notice && (
+            <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
+              {notice.text}
+            </p>
+          )}
+
+          <section aria-labelledby="episodes-heading">
+            <h2 id="episodes-heading" className="sr-only">
+              Episodes
+            </h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              {ranged ? (
+                <div className="flex min-w-0 gap-4 overflow-x-auto whitespace-nowrap">
+                  {Array.from({ length: rangeCount }, (_, k) => {
+                    const start = k * RANGE_SIZE
+                    const end = Math.min(start + RANGE_SIZE, episodes.length)
+                    const active = activeRange === start
+                    return (
+                      <button
+                        key={start}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setRangeStart(start)}
+                        className={`min-h-11 shrink-0 text-sm font-semibold transition ${
+                          active ? 'text-[#f0436a]' : 'text-muted hover:text-white'
+                        }`}
+                      >
+                        {start + 1}-{end}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <span className="text-sm font-semibold text-[#f0436a]">
+                  {episodes.length > 0 ? `1-${episodes.length}` : 'No episodes'}
+                </span>
+              )}
+              {episodes.length > 0 && (
+                <button
+                  type="button"
+                  ref={allButtonRef}
+                  onClick={() => setAllOpen(true)}
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm font-semibold text-white/80 hover:text-white"
+                >
+                  All episodes
+                  <ChevronRightIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {episodes.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">
+                No episodes were returned for this drama.
+              </p>
+            ) : (
+              <ul className="grid grid-cols-6 gap-2 sm:grid-cols-8 lg:grid-cols-10">
+                {visibleEpisodes.map((ep) => (
+                  <EpisodeTile
+                    key={ep.index}
+                    ep={ep}
+                    progress={progressByEp.get(ep.index)}
+                    selected={selectedIndex === ep.index}
+                    onPlay={() => playEpisode(ep.index)}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {allOpen && (
+            <Modal
+              title="All episodes"
+              description={`${episodes.length} episodes`}
+              size="lg"
+              returnFocusRef={allButtonRef}
+              onClose={() => setAllOpen(false)}
+            >
+              <ul className="-mx-2 divide-y divide-line">
+                {episodes.map((ep) => (
+                  <EpisodeRow
+                    key={ep.index}
+                    bookId={bookId}
+                    ep={ep}
+                    display={displayOf(ep)}
+                    progress={progressByEp.get(ep.index)}
+                    selected={selectedIndex === ep.index}
+                    onPlay={() => {
+                      playEpisode(ep.index)
+                      setAllOpen(false)
+                    }}
+                  />
+                ))}
+              </ul>
+            </Modal>
+          )}
         </div>
-      </section>
-
-      <section aria-labelledby="episodes-heading">
-        <h2 id="episodes-heading" className="mb-3 flex items-baseline gap-2 text-lg font-semibold">
-          Episodes
-          <span className="text-sm font-normal text-muted">{episodes.length}</span>
-        </h2>
-
-        {episodes.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">
-            No episodes were returned for this drama.
-          </p>
-        ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-            {episodes.map((ep) => (
-              <EpisodeTile
-                key={ep.index}
-                bookId={bookId}
-                ep={ep}
-                display={displayOf(ep)}
-                progress={progressByEp.get(ep.index)}
-                current={currentKey === String(ep.index)}
-                onPlay={() => playEpisode(ep.index)}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+      </div>
+      <Toast toast={toast} />
+    </>
   )
 }
 
+function ActionButton({
+  label,
+  pressed,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  pressed?: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={pressed}
+      className="flex min-h-11 flex-col items-center gap-2 text-xs font-medium text-white/90 disabled:opacity-50"
+    >
+      <span
+        className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
+          pressed ? 'bg-white/20 text-[#f0436a]' : 'bg-white/10 hover:bg-white/20'
+        }`}
+      >
+        {children}
+      </span>
+      <span>{label}</span>
+    </button>
+  )
+}
+
+function progressPercent(progress: StreamProgress | undefined): number {
+  return progress && progress.duration > 0 ? Math.min(100, Math.round((progress.position / progress.duration) * 100)) : 0
+}
+
 function EpisodeTile({
+  ep,
+  progress,
+  selected,
+  onPlay,
+}: {
+  ep: Episode
+  progress: StreamProgress | undefined
+  selected: boolean
+  onPlay: () => void
+}) {
+  const number = ep.index + 1
+  const watched = !!progress?.completed
+  const percent = progressPercent(progress)
+  const partial = !watched && percent > 0
+  const state = watched ? ', watched' : partial ? ', in progress' : ''
+  const tone = selected
+    ? 'bg-[#f0436a] text-white'
+    : watched
+      ? 'bg-[#1c1c1c] text-white/40 hover:bg-[#262626]'
+      : 'bg-[#2a2a2a] text-white hover:bg-[#363636]'
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onPlay}
+        aria-label={`Episode ${number}${state}`}
+        aria-current={selected || undefined}
+        className={`relative flex aspect-square w-full items-center justify-center rounded-lg text-sm font-semibold transition ${tone}`}
+      >
+        {number}
+        {watched && !selected && <CheckIcon className="absolute top-1 right-1 h-3 w-3 text-white/50" />}
+        {partial && (
+          <span aria-hidden="true" className="absolute inset-x-2 bottom-1.5 block h-0.5 overflow-hidden rounded bg-white/15">
+            <span className="block h-full" style={{ width: `${percent}%`, backgroundColor: PINK }} />
+          </span>
+        )}
+      </button>
+    </li>
+  )
+}
+
+function EpisodeRow({
   bookId,
   ep,
   display,
   progress,
-  current,
+  selected,
   onPlay,
 }: {
   bookId: string
   ep: Episode
   display: DisplayInfo
   progress: StreamProgress | undefined
-  current: boolean
+  selected: boolean
   onPlay: () => void
 }) {
-  const percent =
-    progress && progress.duration > 0 ? Math.min(100, Math.round((progress.position / progress.duration) * 100)) : 0
-  const showBar = !!progress && !progress.completed && percent > 0
-  const title = isGenericEpisodeName(ep.name) ? '' : ep.name
+  const number = ep.index + 1
+  const name = isGenericEpisodeName(ep.name) ? `Episode ${number}` : ep.name
+  const percent = progressPercent(progress)
+  const partial = !!progress && !progress.completed && percent > 0
   const localHref =
     display.state === 'downloaded' && display.id !== undefined
       ? `/watch/${encodeURIComponent(bookId)}/${encodeURIComponent(String(display.id))}`
       : null
 
   return (
-    <li className="relative">
+    <li className="flex items-center gap-3 px-2">
       <button
         type="button"
         onClick={onPlay}
-        aria-current={current || undefined}
-        className={`flex min-h-[44px] w-full flex-col items-start gap-1.5 rounded-lg border bg-panel p-3 text-left transition hover:bg-panel-2 ${
-          current ? 'border-accent-hi' : 'border-line'
-        }`}
+        aria-current={selected || undefined}
+        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 text-left"
       >
-        <span className="font-mono text-xs text-muted">{fmtEpisode(ep.index)}</span>
-        {title && <span className="line-clamp-2 text-sm leading-snug font-medium">{title}</span>}
-        <span className="mt-auto flex flex-wrap items-center gap-2 pt-1 text-xs">
-          {progress?.completed && (
-            <span className="inline-flex items-center gap-1 font-semibold text-emerald-300">
-              <CheckIcon className="h-3.5 w-3.5" />
-              Watched
+        <span className={`w-10 shrink-0 font-mono text-sm ${selected ? 'text-[#f0436a]' : 'text-muted'}`}>{number}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{name}</span>
+          {partial && (
+            <span
+              role="progressbar"
+              aria-label={`Episode ${number} progress`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              className="mt-1.5 block h-1 w-full overflow-hidden rounded bg-white/10"
+            >
+              <span className="block h-full" style={{ width: `${percent}%`, backgroundColor: PINK }} />
             </span>
           )}
-          {display.state !== 'none' && display.state !== 'downloaded' && (
-            <StatusPill status={display.state} bytesDone={display.bytesDone} bytesTotal={display.bytesTotal} />
-          )}
         </span>
-        {showBar && (
-          <span
-            role="progressbar"
-            aria-label={`${fmtEpisode(ep.index)} progress`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={percent}
-            className="block h-1 w-full overflow-hidden rounded bg-white/10"
-          >
-            <span className="block h-full bg-accent-hi" style={{ width: `${percent}%` }} />
+        {progress?.completed && (
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-300">
+            <CheckIcon className="h-3.5 w-3.5" />
+            Watched
           </span>
+        )}
+        {display.state !== 'none' && display.state !== 'downloaded' && (
+          <StatusPill status={display.state} bytesDone={display.bytesDone} bytesTotal={display.bytesTotal} />
         )}
       </button>
       {display.state === 'downloaded' &&
         (localHref ? (
           <Link
             to={localHref}
-            className="absolute top-2 right-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-emerald-300 hover:bg-emerald-500/25"
+            className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-emerald-300 hover:bg-emerald-500/25"
           >
             Downloaded
           </Link>
         ) : (
-          <span className="absolute top-2 right-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-emerald-300">
+          <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-emerald-300">
             Downloaded
           </span>
         ))}
     </li>
   )
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // The Clipboard API is unavailable on plain-http LAN addresses; fall back below.
+  }
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.style.position = 'fixed'
+  area.style.opacity = '0'
+  document.body.appendChild(area)
+  area.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  area.remove()
+  return ok
 }
 
 function BackLink() {
