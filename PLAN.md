@@ -517,3 +517,53 @@ Each phase stops for confirmation before the next.
 5. Verify on a data copy: Home has one DramaBox row and no DramaBuzz row; `/api/browse/sources` has no
    DramaBuzz; searching a DramaBox title (e.g. "Love's Encore", "He Broke the Heart") returns it labelled
    DramaBox once; hover screenshot shows only the hovered card scaled.
+
+---
+
+# Ticket: Row "View all", platform logos, portrait cards, series page redesign, DramaBox search (2026-10-21)
+
+## Findings
+- DramaBox search is hard-capped upstream: always 12 entries (10–12 dramas + actors) for any query;
+  `page`, `pageNo`, `pageNum`, `offset`, `size`, `pageSize`, `limit`, `index` are all ignored.
+- Covers from every platform are portrait (≈3:4); the current 16:9 cards crop most of the image.
+- Rows have no "View all"; row titles are plain text. No platform logos exist in the app.
+- Reference series page (mobile): breadcrumb "Home / Title / EP 1", "Episode 1 · Title", "Episode 1 plot"
+  with More, four round actions (Like + count, Save, Follow, Share), episode range "1-37" + "All episodes >",
+  numbered square tiles in a 6-column grid with the current episode highlighted in pink.
+
+## Phase 1: Cards, rows, logos
+1. **Portrait cards**: ShowCard `aspect-[2/3]` (poster), cover `object-cover object-center`; episode-count badge
+   and platform logo chip on the image; title + first tag below. Row items `w-[140px] sm:w-[170px]
+   lg:w-[190px]`; grids `grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7`. Continue
+   Watching keeps a progress bar on the portrait card. Skeletons match.
+2. **Platform logos**: download each platform's official icon (site favicon / app icon from its official
+   website or app-store listing) once into `web/public/platforms/<id>.png` (64×64, committed); fallback is a
+   coloured monogram badge generated from the name. One `<PlatformLogo id size>` component used in row
+   titles, cards, Browse platform select, search results and the series page.
+3. **Row headers**: `[logo] DramaBox` (platform rows), plain title for Trending / New & Popular / genre rows;
+   right side **View all ›** linking to: platform row → `/browse?source=<id>`; Trending → `/browse?sort=latest`
+   across the active platform; New & Popular → `/browse?sort=popular`; genre row → `/browse?tag=<tag>`;
+   Continue Watching → `/library` (downloads) / hidden when there is nothing more.
+
+## Phase 2: Series page redesign (matches the reference)
+1. Layout: player (or cover with a big play button) on top; then breadcrumb `Home / <Title> / EP n`;
+   heading `Episode n · <Title>`; "Episode n plot" (series intro, line-clamp-3 + More); desktop: player left
+   (portrait-friendly max height), details + episodes right.
+2. **Action row** (round 48 px buttons with labels):
+   - **Like**: per-account like stored server-side (`likes` table); count = DramaUs accounts that liked it.
+   - **Save**: add/remove My List (existing favourites); filled icon when saved.
+   - **Follow**: server checks followed shows every 6 h (and when the show is opened); when the episode count
+     grows, the follower gets an in-app notification "New episodes of <Title>".
+   - **Share**: `navigator.share` when available, else copy link with a "Link copied" toast.
+3. **Episodes**: range tabs `1-50`, `51-100`, … (one range when ≤ 50) in pink for the active range;
+   "All episodes ›" opens a sheet listing every episode with name, progress and downloaded badge; numbered
+   square tiles, 6 columns on phones (8–10 on desktop), current episode pink, watched ones dimmed with a
+   tiny check, partially watched with a thin progress line; admins keep Download all in a "⋯" menu.
+
+## Phase 3: More DramaBox search results
+Query expansion for platforms with capped search (DramaBox first): besides the full query, also search each
+word of ≥ 4 letters and the first two words (max 3 extra upstream calls, in parallel, cached 10 min), merge
+and rank (phrase match first, then number of words matched), drop actor entries. Expected: ~10 → ~25–35
+DramaBox results for multi-word queries; single-word queries stay at ≤ 12 (upstream limit).
+
+Each phase stops for confirmation before the next.

@@ -111,6 +111,100 @@ export const netShort = {
   },
 };
 
+const EXPAND_STOP_WORDS = new Set([
+  'the', 'and', 'with', 'from', 'that', 'this', 'your', 'his', 'her', 'for',
+  'who', 'was', 'are', 'not', 'but', 'into', 'over', 'after', 'when',
+]);
+const EXPAND_MAX_QUERIES = 4;
+const EXPAND_CACHE_TTL_MS = 10 * 60 * 1000;
+const EXPAND_CACHE_MAX = 200;
+const expandCache = new Map();
+
+function queryWords(q) {
+  return String(q || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+// Capped upstream searches return the same ~12 hits for a long query, so each
+// distinct word and the first two words are searched too and the results merged.
+function expandedQueries(q) {
+  const full = String(q || '').trim().replace(/\s+/g, ' ');
+  const queries = [full];
+  const words = queryWords(full);
+  if (words.length < 2) return queries;
+  const candidates = [
+    ...words.filter((w) => w.length >= 4 && !EXPAND_STOP_WORDS.has(w)),
+    words.slice(0, 2).join(' '),
+  ];
+  for (const candidate of candidates) {
+    if (queries.length >= EXPAND_MAX_QUERIES) break;
+    if (!queries.some((existing) => existing.toLowerCase() === candidate)) queries.push(candidate);
+  }
+  return queries;
+}
+
+function expandCacheGet(key) {
+  const hit = expandCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > EXPAND_CACHE_TTL_MS) {
+    expandCache.delete(key);
+    return null;
+  }
+  return hit.items;
+}
+
+function expandCacheSet(key, items) {
+  if (!expandCache.has(key) && expandCache.size >= EXPAND_CACHE_MAX) {
+    expandCache.delete(expandCache.keys().next().value);
+  }
+  expandCache.set(key, { at: Date.now(), items });
+}
+
+async function cachedSearch(lang, query, fetchOne) {
+  const key = `${lang}\u0000${query.toLowerCase()}`;
+  const hit = expandCacheGet(key);
+  if (hit) return hit;
+  const items = await fetchOne(query);
+  expandCacheSet(key, items);
+  return items;
+}
+
+async function expandedSearch(ctx, q, fetchOne) {
+  const queries = expandedQueries(q);
+  const outcomes = await Promise.allSettled(
+    queries.map((query) => cachedSearch(ctx.lang, query, fetchOne)),
+  );
+  const failures = outcomes.filter((o) => o.status === 'rejected');
+  if (failures.length === outcomes.length) throw failures[0].reason;
+
+  const merged = new Map();
+  outcomes.forEach((outcome, index) => {
+    if (outcome.status !== 'fulfilled') return;
+    for (const item of outcome.value) {
+      if (!item.bookId) continue;
+      const id = String(item.bookId);
+      const entry = merged.get(id);
+      if (entry) {
+        if (index === 0) entry.fromFull = true;
+      } else {
+        merged.set(id, { item, fromFull: index === 0 });
+      }
+    }
+  });
+
+  const phrase = queries[0].toLowerCase();
+  const words = [...new Set(queryWords(queries[0]))];
+  const ranked = [...merged.values()].map(({ item, fromFull }) => {
+    const title = String(item.name || '').toLowerCase();
+    let score = 0;
+    if (title.includes(phrase)) score += 3;
+    for (const word of words) if (title.includes(word)) score += 1;
+    if (fromFull) score += 1;
+    return { item, score };
+  });
+  ranked.sort((a, b) => b.score - a.score);
+  return { items: ranked.map((r) => r.item), hasMore: false };
+}
+
 const DRAMABOX_FEEDS = ['/api/dramabox/trending', '/api/dramabox/latest', '/api/dramabox/foryou'];
 
 function unwrapList(data) {
@@ -134,10 +228,16 @@ export const dramaBox = {
     return { items: dedupe(raw.map(mapDramaBox)), hasMore: false };
   },
 
+  expandSearch: true,
+
   async search(ctx, { q, page = 1 } = {}) {
     if (page > 1) return { items: [], hasMore: false };
-    const data = await ctx.request('/api/dramabox/search', { query: q, lang: ctx.lang, page: 1 });
-    return { items: dedupe(unwrapList(data).map(mapDramaBox)), hasMore: false };
+    const fetchOne = async (query) => {
+      const data = await ctx.request('/api/dramabox/search', { query, lang: ctx.lang, page: 1 });
+      return dedupe(unwrapList(data).map(mapDramaBox));
+    };
+    if (this.expandSearch) return expandedSearch(ctx, q, fetchOne);
+    return { items: await fetchOne(q), hasMore: false };
   },
 
   async chapters(ctx, bookId) {
