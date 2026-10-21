@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import { isVipAccount } from '../lib/access'
 import { useStatus } from '../status'
 import { useInstall } from '../install'
 import { BottomTabs } from './BottomTabs'
@@ -31,6 +32,8 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false)
   const [installOpen, setInstallOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [balance, setBalance] = useState<number | null>(null)
+  const isVip = isVipAccount(status?.account)
   const { installed } = useInstall()
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
@@ -43,6 +46,20 @@ export function Nav() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    if (!menuOpen || isVip) return
+    let cancelled = false
+    api
+      .getRewards()
+      .then((res) => {
+        if (!cancelled) setBalance(res.balance)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [menuOpen, isVip])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -168,6 +185,9 @@ export function Nav() {
               <button type="button" role="menuitem" onClick={() => void switchProfile()} className={menuItemClass}>
                 Switch profile
               </button>
+              <Link to="/rewards" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+                {isVip ? 'Rewards' : `Rewards · ${balance ?? '…'} pts`}
+              </Link>
               <Link to="/account" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                 Account
               </Link>

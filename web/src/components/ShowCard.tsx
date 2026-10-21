@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Show } from '../api'
+import { isVipAccount } from '../lib/access'
+import { useStatus } from '../status'
 import { PlatformLogo } from './PlatformLogo'
 import { PlayIcon } from './icons'
+import { VipLockBadge } from './TierBadge'
 import { Poster } from './ui'
 
 interface ShowCardProps {
@@ -25,6 +28,8 @@ export function ShowCard({ show, to, progress, caption }: ShowCardProps) {
   const percent = progress === undefined ? null : Math.round(Math.min(1, Math.max(0, progress)) * 100)
   const subtitle = caption ?? show.tags[0] ?? null
   const platform = show.sourceName ?? show.source ?? null
+  const viewerVip = isVipAccount(useStatus().status?.account)
+  const access = viewerVip ? null : show.access ?? null
   return (
     <Link to={to ?? showPath(show)} className="group/card block rounded-md outline-none">
       <div className="relative overflow-hidden rounded-md bg-panel-2 ring-0 ring-accent-hi transition duration-200 group-hover/card:scale-105 group-hover/card:shadow-xl group-hover/card:shadow-black/70 group-hover/card:ring-2 group-hover/card:ring-white/40 group-focus-visible/card:ring-2">
@@ -35,6 +40,12 @@ export function ShowCard({ show, to, progress, caption }: ShowCardProps) {
             className="absolute top-1.5 left-1.5 flex items-center rounded-md bg-black/60 p-0.5 backdrop-blur-sm"
           >
             <PlatformLogo id={show.source} name={show.sourceName ?? platform} size={20} />
+          </span>
+        )}
+        {access === 'vip' && <VipLockBadge className="absolute bottom-1.5 left-1.5" />}
+        {access === 'unlocked' && (
+          <span className="absolute bottom-1.5 left-1.5 rounded bg-emerald-500/80 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">
+            Unlocked
           </span>
         )}
         {show.episodeCount > 0 && (

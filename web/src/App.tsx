@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
 import { AdminOnly } from './components/AdminOnly'
+import { DailyRewardPrompt } from './components/DailyRewardPrompt'
 import { InstallBanner } from './components/InstallBanner'
 import { Nav } from './components/Nav'
 import { UpstreamBanner } from './components/UpstreamBanner'
@@ -19,6 +20,7 @@ import { LibraryShow } from './pages/LibraryShow'
 import { Login } from './pages/Login'
 import { ChangePassword } from './pages/ChangePassword'
 import { Profiles } from './pages/Profiles'
+import { Rewards } from './pages/Rewards'
 import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Setup } from './pages/Setup'
@@ -139,6 +141,7 @@ export default function App() {
           <Route path="/library/:bookId" element={<LibraryShow />} />
           <Route path="/favourites" element={<Favourites />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/rewards" element={<Rewards />} />
           <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
           <Route path="/profiles" element={<Profiles />} />
           <Route
@@ -169,6 +172,7 @@ export default function App() {
         </Routes>
       </main>
       {!location.pathname.startsWith('/watch/') && <InstallBanner />}
+      {!location.pathname.startsWith('/watch/') && <DailyRewardPrompt />}
     </DownloadsProvider>
   )
 }

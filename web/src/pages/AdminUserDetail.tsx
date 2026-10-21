@@ -11,6 +11,7 @@ import {
 } from '../api'
 import { ChevronLeftIcon } from '../components/icons'
 import { ShowCard, showGridClass, showPath } from '../components/ShowCard'
+import { TierControls } from '../components/TierControls'
 import { Toast, useToast } from '../components/Toast'
 import { UserActions } from '../components/UserActions'
 import { RoleBadge, StatusBadges, UserInitial } from '../components/UserBadges'
@@ -179,6 +180,8 @@ export function AdminUserDetail() {
           onNotify={notify}
         />
       </header>
+
+      <TierControls key={`${account.tier}-${account.vipUntil ?? 'never'}`} user={account} onChanged={() => void load()} onNotify={notify} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {tiles.map((tile) => (

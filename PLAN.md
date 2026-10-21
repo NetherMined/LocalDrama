@@ -668,4 +668,37 @@ VIP badges/locks on cards and episode tiles, locked-episode screen in the player
 (points / reward / ask admin), a Rewards page (balance, daily claim, streak, history, shop), points in the
 avatar menu, admin Settings → Free plan editor, Users page tier controls.
 
+### Phase 5 spec
+Server API is in "Phase 4 API" above. Web only; Dramora theme tokens (no hard-coded rose/red); works at 320 px.
+1. **api.ts**: types `Plan`, `RewardsSummary`, `DailyResult`, `ShareLink`, `ShopResult`; `Config.plan`; `api.getRewards`,
+   `claimDaily`, `createShare`, `completeShare`, `shopPurchase`, and `updateUser` accepting `tier` / `vipUntil`.
+   `request()` throws an `ApiError` (extends Error) carrying `status` and the parsed body, so callers can read
+   `vip_required` options. Helper `isVipAccount(account)` in `lib/` (admin, or tier vip and vipUntil null/future).
+2. **Follow** button on the series page is hidden for VIP/admin accounts (free accounts only).
+3. **Cards** (`ShowCard`): `access === 'vip'` shows a small lock + "VIP" badge; free accounts see "Unlocked" on
+   `unlocked` shows. Nothing extra for VIP accounts.
+4. **Series page**: VIP badge in the header for locked series; locked episode tiles are dimmed with a lock icon.
+   Clicking a locked tile (or a stream reply 403 `vip_required`) opens the **Locked dialog** instead of playing.
+5. **Locked dialog**: why it's locked ("<Platform> is a VIP platform" / "One of the most popular series on
+   <Platform>"), points balance, one button per option with its cost ("Unlock episodes 6–10 · 40 pts",
+   "Unlock the whole series · 100 pts" (shows the My List price when lower), "Unlock <Platform> for 24 h · 300 pts").
+   An option the balance can't cover is disabled with "N more points". Buying → toast, reload episodes, play.
+   Links: "Earn points" → /rewards; footer "Want everything? Ask your admin for VIP."
+6. **Rewards page** `/rewards`: balance; streak (N of 7 dots); daily reward card (Claim → shows what was won,
+   linking to the unlocked series); "Share to earn" (today x/3, +10 per share, +25 when a friend opens it);
+   active unlocks (link to series, expiry for platform unlocks); recent history with readable reasons; prices.
+   VIP accounts see "You're VIP: everything is unlocked" and no claim/shop prompts.
+7. **Daily prompt**: once per session for a signed-in free account whose daily reward isn't claimed, a small
+   bottom sheet "Your daily reward is ready" with Claim / Later.
+8. **Share** button: uses `createShare` → `${location.origin}${path}`; after the share sheet completes or the
+   link is copied, `completeShare(code)` and toast "+10 points" when points > 0.
+9. **Avatar menu**: "Rewards · N pts" entry (free accounts) / "Rewards" (VIP).
+10. **Settings → Free plan** (admin): VIP platforms checklist, popular share %, absolute play threshold,
+    four prices, share points / max a day / join bonus, streak days / bonus, episodes per unlock, platform unlock
+    hours, gift every N days, daily reward weights. Saves `PUT /api/settings { plan }`.
+11. **Users**: tier badge on rows (VIP / Free / "VIP until 12 Nov" / "VIP expired"); user detail page gets a
+    Free/VIP switch plus an optional expiry date (end of that day, local) with "Never expires".
+**Verify:** `npx tsc --noEmit` and `npm run build` clean; rebuild container; browser check as a free test account
+and a VIP account at 375 px and desktop.
+
 Each phase stops for confirmation before the next.

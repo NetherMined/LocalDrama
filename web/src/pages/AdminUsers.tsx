@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type AdminActivitySummary, type AdminUserRow } from '../api'
 import { CreateUserDialog } from '../components/CreateUserDialog'
 import { PlusIcon } from '../components/icons'
+import { TierBadge } from '../components/TierBadge'
 import { RoleBadge, StatusBadges, UserInitial } from '../components/UserBadges'
 import { UserActions, type Notify } from '../components/UserActions'
 import { Toast, useToast } from '../components/Toast'
@@ -156,7 +157,10 @@ function UserTableRow({
         </div>
       </td>
       <td className={cellClass}>
-        <RoleBadge role={user.role} />
+        <div className="flex flex-wrap gap-1.5">
+          <RoleBadge role={user.role} />
+          <TierBadge tier={user.tier} vipUntil={user.vipUntil} role={user.role} />
+        </div>
       </td>
       <td className={cellClass}>
         <StatusBadges user={user} />
@@ -205,6 +209,7 @@ function UserCard({
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-2">
               <RoleBadge role={user.role} />
+              <TierBadge tier={user.tier} vipUntil={user.vipUntil} role={user.role} />
               <StatusBadges user={user} />
             </p>
           </div>

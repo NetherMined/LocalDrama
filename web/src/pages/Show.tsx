@@ -1,16 +1,32 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail, type ShowSocial, type StreamProgress } from '../api'
+import {
+  api,
+  lockedEpisodeOf,
+  useEvents,
+  type DownloadStatus,
+  type Episode,
+  type LockedEpisode,
+  type ShowDetail,
+  type ShowSocial,
+  type ShareLink,
+  type ShopResult,
+  type StreamProgress,
+} from '../api'
 import { useDownloads } from '../downloads'
 import { useStatus } from '../status'
 import { PlayerShell, type PlayerEpisode, type PlayerHandle, type PlayerSample, type ResolvedSource } from '../components/PlayerShell'
 import { StatusPill } from '../components/StatusPill'
-import { BellIcon, CheckIcon, ChevronRightIcon, HeartIcon, MoreVerticalIcon, PlayIcon, PlusIcon, ShareIcon } from '../components/icons'
+import { BellIcon, CheckIcon, ChevronRightIcon, HeartIcon, LockIcon, MoreVerticalIcon, PlayIcon, PlusIcon, ShareIcon } from '../components/icons'
 import { PlatformLogo } from '../components/PlatformLogo'
+import { LockedDialog } from '../components/LockedDialog'
 import { Modal } from '../components/Modal'
+import { VipLockBadge } from '../components/TierBadge'
 import { Toast, useToast } from '../components/Toast'
 import { LoadError } from '../components/ui'
+import { isVipAccount } from '../lib/access'
 import { errorMessage, isGenericEpisodeName } from '../lib/format'
+import { platformInfo } from '../lib/platforms'
 
 type Display = 'none' | DownloadStatus | 'downloaded'
 
@@ -29,8 +45,12 @@ export function Show() {
   const [searchParams, setSearchParams] = useSearchParams()
   const source = searchParams.get('source') || undefined
   const { byEpisode } = useDownloads()
-  const isAdmin = useStatus().status?.account?.role === 'admin'
+  const account = useStatus().status?.account ?? null
+  const isAdmin = account?.role === 'admin'
+  const viewerVip = isVipAccount(account)
   const [detail, setDetail] = useState<ShowDetail | null>(null)
+  const [locked, setLocked] = useState<{ index: number; info: LockedEpisode } | null>(null)
+  const shareLink = useRef<ShareLink | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [libraryIds, setLibraryIds] = useState<Map<number, number | string>>(() => new Map())
@@ -78,6 +98,15 @@ export function Show() {
     setMoreOpen(false)
     setExpanded(false)
     setSocial(null)
+    setLocked(null)
+    shareLink.current = null
+    // Fetched ahead of time: awaiting it inside the click would cost the share sheet its user gesture on iOS.
+    api
+      .createShare(bookId, source)
+      .then((link) => {
+        if (currentBook.current === bookId) shareLink.current = link
+      })
+      .catch(() => undefined)
     api
       .watchProgress(bookId)
       .then((res) => {
@@ -193,17 +222,72 @@ export function Show() {
   }
 
   async function share() {
-    const url = window.location.href
+    // Without a share code the plain page link is still shared, just without points.
+    const link = shareLink.current
+    const code = link?.code ?? null
+    const url = link ? `${window.location.origin}${link.path}` : window.location.href
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title, text: `${title} · Episode ${selectedNumber}`, url })
+        await creditShare(code)
         return
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return
       }
     }
-    if (await copyText(url)) notify('Link copied', 'ok')
-    else notify('Could not copy the link', 'err')
+    if (await copyText(url)) {
+      notify('Link copied', 'ok')
+      await creditShare(code)
+    } else {
+      notify('Could not copy the link', 'err')
+    }
+  }
+
+  async function creditShare(code: string | null) {
+    if (!code) return
+    try {
+      const res = await api.completeShare(code)
+      if (res.points > 0) notify(`+${res.points} points`, 'ok')
+    } catch {
+      // Sharing still worked; the points simply were not credited.
+    }
+  }
+
+  function isLockedEpisode(index: number): boolean {
+    return !viewerVip && episodes.find((ep) => ep.index === index)?.access === 'vip'
+  }
+
+  // Free episodes play synchronously so the click keeps its fullscreen gesture. Locked ones ask the
+  // stream endpoint first so the dialog gets the unlock options, and never start the player.
+  async function requestEpisode(index: number) {
+    if (!isLockedEpisode(index)) {
+      playEpisode(index)
+      return
+    }
+    try {
+      await api.stream(bookId, index, source)
+      playEpisode(index, false)
+    } catch (err) {
+      const info = lockedEpisodeOf(err)
+      if (info) setLocked({ index, info })
+      else notify(errorMessage(err), 'err')
+    }
+  }
+
+  async function refreshDetail() {
+    try {
+      const res = await api.show(bookId, source)
+      if (currentBook.current === bookId) setDetail(res)
+    } catch {
+      // The list keeps its last state; the unlocked episode still plays.
+    }
+  }
+
+  async function afterUnlock(index: number, result: ShopResult) {
+    setLocked(null)
+    notify(`Unlocked. ${result.balance} points left.`, 'ok')
+    await refreshDetail()
+    playEpisode(index, false)
   }
 
   // Resumes an unfinished episode from where it was left; a few seconds in is not worth resuming.
@@ -214,13 +298,7 @@ export function Show() {
 
   async function resolveStream(key: string): Promise<ResolvedSource> {
     const index = Number(key)
-    const query = source ? `?source=${encodeURIComponent(source)}` : ''
-    const res = await fetch(`/api/shows/${encodeURIComponent(bookId)}/stream/${index}${query}`)
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || `Failed to get stream (${res.status})`)
-    }
-    const { url, hls } = await res.json()
+    const { url, hls } = await api.stream(bookId, index, source)
     if (!url) throw new Error('No stream URL returned')
     return { src: url, hls: !!hls, startAt: resumeAt(index) }
   }
@@ -338,6 +416,10 @@ export function Show() {
   const selectedIndex = currentKey !== null ? Number(currentKey) : primaryIndex
   const selectedNumber = selectedIndex + 1
 
+  const actionCount = 3 + (viewerVip ? 0 : 1) + (isAdmin ? 1 : 0)
+  const actionCols = actionCount === 3 ? 'grid-cols-3' : actionCount === 4 ? 'grid-cols-4' : 'grid-cols-5'
+  const platformName = platformInfo(show?.source ?? source, show?.sourceName).name
+
   const tags = (show?.tags ?? []).slice(0, 4)
   const episodeTotal = episodes.length || show?.episodeCount || 0
   const platformId = show?.source ?? source ?? null
@@ -366,7 +448,7 @@ export function Show() {
               </div>
               <button
                 type="button"
-                onClick={() => playEpisode(selectedIndex)}
+                onClick={() => void requestEpisode(selectedIndex)}
                 disabled={episodes.length === 0}
                 aria-label={`Play episode ${selectedNumber}`}
                 className="absolute top-1/2 left-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-hi text-white shadow-2xl shadow-black/70 transition hover:scale-105 disabled:opacity-40"
@@ -383,6 +465,7 @@ export function Show() {
             onSave={(key, sample, beacon) => saveWatch(Number(key), sample, beacon)}
             onChange={onPlayerChange}
             onClose={onPlayerClose}
+            onLocked={(key, info) => setLocked({ index: Number(key), info })}
             showTitle={title}
             poster={show?.cover}
             portrait
@@ -416,6 +499,12 @@ export function Show() {
           </nav>
 
           <div className="space-y-2">
+            {show?.access === 'vip' && !viewerVip && (
+              <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                <VipLockBadge />
+                Locked for your account. Unlock episodes with points or ask your admin for VIP.
+              </p>
+            )}
             <h1 className="text-3xl leading-tight font-bold tracking-tight break-words sm:text-4xl">
               Episode {selectedNumber} · {title}
             </h1>
@@ -455,7 +544,7 @@ export function Show() {
             )}
           </div>
 
-          <div className={`grid gap-2 ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} sm:max-w-md`}>
+          <div className={`grid gap-2 ${actionCols} sm:max-w-md`}>
             <ActionButton
               label={social && social.likes > 0 ? `Like ${social.likes}` : 'Like'}
               pressed={social?.liked ?? false}
@@ -467,14 +556,16 @@ export function Show() {
             <ActionButton label={isFav ? 'Saved' : 'Save'} pressed={isFav} disabled={favBusy} onClick={() => void toggleFavourite()}>
               {isFav ? <CheckIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
             </ActionButton>
-            <ActionButton
-              label={social?.following ? 'Following' : 'Follow'}
-              pressed={social?.following ?? false}
-              disabled={!social || socialPending === 'follow'}
-              onClick={() => void toggleFollow()}
-            >
-              <BellIcon className="h-5 w-5" filled={social?.following} />
-            </ActionButton>
+            {!viewerVip && (
+              <ActionButton
+                label={social?.following ? 'Following' : 'Follow'}
+                pressed={social?.following ?? false}
+                disabled={!social || socialPending === 'follow'}
+                onClick={() => void toggleFollow()}
+              >
+                <BellIcon className="h-5 w-5" filled={social?.following} />
+              </ActionButton>
+            )}
             <ActionButton label="Share" onClick={() => void share()}>
               <ShareIcon className="h-5 w-5" />
             </ActionButton>
@@ -576,7 +667,8 @@ export function Show() {
                     ep={ep}
                     progress={progressByEp.get(ep.index)}
                     selected={selectedIndex === ep.index}
-                    onPlay={() => playEpisode(ep.index)}
+                    locked={isLockedEpisode(ep.index)}
+                    onPlay={() => void requestEpisode(ep.index)}
                   />
                 ))}
               </ul>
@@ -600,8 +692,9 @@ export function Show() {
                     display={displayOf(ep)}
                     progress={progressByEp.get(ep.index)}
                     selected={selectedIndex === ep.index}
+                    locked={isLockedEpisode(ep.index)}
                     onPlay={() => {
-                      playEpisode(ep.index)
+                      void requestEpisode(ep.index)
                       setAllOpen(false)
                     }}
                   />
@@ -611,6 +704,17 @@ export function Show() {
           )}
         </div>
       </div>
+      {locked && (
+        <LockedDialog
+          bookId={bookId}
+          source={source ?? show?.source ?? null}
+          platformName={platformName}
+          episodeNumber={locked.index + 1}
+          locked={locked.info}
+          onUnlocked={(result) => void afterUnlock(locked.index, result)}
+          onClose={() => setLocked(null)}
+        />
+      )}
       <Toast toast={toast} />
     </>
   )
@@ -657,23 +761,27 @@ function EpisodeTile({
   ep,
   progress,
   selected,
+  locked,
   onPlay,
 }: {
   ep: Episode
   progress: StreamProgress | undefined
   selected: boolean
+  locked: boolean
   onPlay: () => void
 }) {
   const number = ep.index + 1
   const watched = !!progress?.completed
   const percent = progressPercent(progress)
   const partial = !watched && percent > 0
-  const state = watched ? ', watched' : partial ? ', in progress' : ''
+  const state = locked ? ', locked' : watched ? ', watched' : partial ? ', in progress' : ''
   const tone = selected
     ? 'bg-accent-hi text-white'
-    : watched
-      ? 'bg-[#1c1c1c] text-white/40 hover:bg-[#262626]'
-      : 'bg-[#2a2a2a] text-white hover:bg-[#363636]'
+    : locked
+      ? 'bg-panel-2 text-white/50 hover:bg-line'
+      : watched
+        ? 'bg-[#1c1c1c] text-white/40 hover:bg-[#262626]'
+        : 'bg-[#2a2a2a] text-white hover:bg-[#363636]'
 
   return (
     <li>
@@ -685,7 +793,8 @@ function EpisodeTile({
         className={`relative flex aspect-square w-full items-center justify-center rounded-lg text-sm font-semibold transition ${tone}`}
       >
         {number}
-        {watched && !selected && <CheckIcon className="absolute top-1 right-1 h-3 w-3 text-white/50" />}
+        {locked && !selected && <LockIcon className="absolute top-1 right-1 h-3 w-3 text-accent-text" />}
+        {watched && !locked && !selected && <CheckIcon className="absolute top-1 right-1 h-3 w-3 text-white/50" />}
         {partial && (
           <span aria-hidden="true" className="absolute inset-x-2 bottom-1.5 block h-0.5 overflow-hidden rounded bg-white/15">
             <span className="block h-full bg-accent-hi" style={{ width: `${percent}%` }} />
@@ -702,6 +811,7 @@ function EpisodeRow({
   display,
   progress,
   selected,
+  locked,
   onPlay,
 }: {
   bookId: string
@@ -709,6 +819,7 @@ function EpisodeRow({
   display: DisplayInfo
   progress: StreamProgress | undefined
   selected: boolean
+  locked: boolean
   onPlay: () => void
 }) {
   const number = ep.index + 1
@@ -744,7 +855,13 @@ function EpisodeRow({
             </span>
           )}
         </span>
-        {progress?.completed && (
+        {locked && (
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent-text">
+            <LockIcon className="h-3.5 w-3.5" />
+            VIP
+          </span>
+        )}
+        {progress?.completed && !locked && (
           <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-300">
             <CheckIcon className="h-3.5 w-3.5" />
             Watched

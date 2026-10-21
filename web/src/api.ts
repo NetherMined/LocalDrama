@@ -149,6 +149,43 @@ export interface ProxyTest {
   error?: string
 }
 
+export interface PlanPrices {
+  series: number
+  seriesMyList: number
+  platform: number
+  episodes: number
+}
+
+export interface DailyWeight {
+  kind: 'points' | 'episodes' | 'series'
+  value: number
+  weight: number
+}
+
+export interface Plan {
+  version: number
+  vipPlatforms: string[]
+  popularShare: number
+  popularMinPlays: number
+  welcomeGiftEveryDays: number
+  dailyRewards: DailyWeight[]
+  streakDays: number
+  streakBonus: number
+  sharePoints: number
+  shareMaxPerDay: number
+  shareJoinBonus: number
+  episodesPerUnlock: number
+  platformUnlockHours: number
+  prices: PlanPrices
+}
+
+export type PlanPatch = Partial<Omit<Plan, 'version' | 'prices'>> & { prices?: Partial<PlanPrices> }
+
+export interface SettingsSource {
+  id: string
+  name: string
+}
+
 export interface Config {
   downloadRoot: string
   language: string
@@ -159,10 +196,13 @@ export interface Config {
   configured: boolean
   hasPassword: boolean
   mdns: boolean
+  plan: Plan
+  sources: SettingsSource[]
 }
 
-export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword'>> & {
+export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword' | 'plan' | 'sources'>> & {
   password?: string
+  plan?: PlanPatch
 }
 
 export interface SetupInput {
@@ -195,6 +235,24 @@ export interface LockedEpisode {
   source: string | null
   episode: number
   options: UnlockOption[]
+}
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = body
+  }
+}
+
+export function lockedEpisodeOf(err: unknown): LockedEpisode | null {
+  if (!(err instanceof ApiError) || err.status !== 403) return null
+  const body = err.body as Partial<LockedEpisode> | null
+  return body && body.error === 'vip_required' && Array.isArray(body.options) ? (body as LockedEpisode) : null
 }
 
 export interface Show {
@@ -357,6 +415,8 @@ export interface AdminAccount {
   id: number
   username: string
   role: AccountRole
+  tier: AccountTier
+  vipUntil: string | null
   disabled: boolean
   mustChangePassword: boolean
   hasPassword: boolean
@@ -425,6 +485,96 @@ export interface AdminUserActivity {
   profiles: ActivityProfile[]
 }
 
+export type RewardReason =
+  | 'daily_reward'
+  | 'streak_bonus'
+  | 'share'
+  | 'share_join'
+  | 'shop_series'
+  | 'shop_episodes'
+  | 'shop_platform'
+
+export interface DailyReward {
+  kind: 'points' | 'episodes' | 'series'
+  value: number
+  bookId?: string
+  name?: string
+  source?: string | null
+  fromEp?: number
+  toEp?: number
+}
+
+export interface RewardUnlock {
+  kind: 'series' | 'episodes' | 'platform'
+  ref: string
+  name: string
+  fromEp: number | null
+  toEp: number | null
+  expiresAt: string | null
+  reason: string | null
+}
+
+export interface RewardHistoryItem {
+  id: number
+  delta: number
+  reason: RewardReason | string
+  ref: string | null
+  createdAt: string
+}
+
+export interface RewardsSummary {
+  vip: boolean
+  balance: number
+  streak: number
+  daily: { claimed: boolean; reward: DailyReward | null }
+  shares: { today: number; max: number }
+  gifts: { bookId: string; name: string; source: string | null }[]
+  unlocks: RewardUnlock[]
+  history: RewardHistoryItem[]
+  rules: {
+    prices: PlanPrices
+    sharePoints: number
+    shareJoinBonus: number
+    streakDays: number
+    streakBonus: number
+    episodesPerUnlock: number
+    platformUnlockHours: number
+    vipPlatforms: string[]
+  }
+}
+
+export interface DailyResult {
+  reward: DailyReward
+  streak: number
+  bonus: number
+  balance: number
+}
+
+export interface ShareLink {
+  code: string
+  path: string
+}
+
+export interface ShareCompleteResult {
+  points: number
+  sharesToday: number
+  maxPerDay: number
+  balance: number
+}
+
+export interface ShopInput {
+  kind: 'series' | 'episodes' | 'platform'
+  bookId?: string
+  source?: string
+  fromEp?: number
+}
+
+export interface ShopResult {
+  cost: number
+  unlock: RewardUnlock
+  balance: number
+}
+
 export interface CreatedUser {
   account: AdminAccount
   tempPassword: string
@@ -476,14 +626,14 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
     if (res.status === 401 && code === 'sign_in_required') handleUnauthorized()
     if (res.status === 403 && code === 'password_change_required') {
       handlePasswordChangeRequired()
-      throw new Error('Set a new password to continue.')
+      throw new ApiError('Set a new password to continue.', res.status, data)
     }
     if (res.status === 403 && code === 'profile_required') {
       handleProfileRequired()
-      throw new Error('Choose a profile to continue.')
+      throw new ApiError('Choose a profile to continue.', res.status, data)
     }
-    if (res.status === 403 && code === 'admin_required') throw new Error(ADMIN_REQUIRED_MESSAGE)
-    throw new Error(code ?? `Request failed (${res.status})`)
+    if (res.status === 403 && code === 'admin_required') throw new ApiError(ADMIN_REQUIRED_MESSAGE, res.status, data)
+    throw new ApiError(code ?? `Request failed (${res.status})`, res.status, data)
   }
   return data as T
 }
@@ -589,6 +739,8 @@ export const api = {
   suggest: (q: string) => request<SearchSuggestions>(`/api/search/suggest?q=${enc(q)}`),
   show: (bookId: string, source?: string) =>
     request<ShowDetail>(`/api/shows/${enc(bookId)}${source ? `?source=${enc(source)}` : ''}`),
+  stream: (bookId: string, index: number, source?: string) =>
+    request<{ url: string; hls: boolean }>(`/api/shows/${enc(bookId)}/stream/${index}${source ? `?source=${enc(source)}` : ''}`),
 
   social: (bookId: string) => request<ShowSocial>(`/api/shows/${enc(bookId)}/social`),
   setLike: (bookId: string, liked: boolean) =>
@@ -665,12 +817,23 @@ export const api = {
 
   health: () => request<Health>('/api/health'),
 
+  getRewards: () => request<RewardsSummary>('/api/rewards'),
+  claimDaily: () => request<DailyResult>('/api/rewards/daily', { method: 'POST' }),
+  createShare: (bookId: string, source?: string) =>
+    request<ShareLink>('/api/rewards/share', { method: 'POST', body: { bookId, source: source ?? null } }),
+  completeShare: (code: string) =>
+    request<ShareCompleteResult>('/api/rewards/share/complete', { method: 'POST', body: { code } }),
+  shopPurchase: (input: ShopInput) => request<ShopResult>('/api/rewards/shop', { method: 'POST', body: input }),
+
   adminUsers: () => request<{ items: AdminUserRow[] }>('/api/admin/users'),
   adminActivity: () => request<{ items: AdminActivitySummary[] }>('/api/admin/activity'),
   adminUserActivity: (id: number) => request<AdminUserActivity>(`/api/admin/users/${id}/activity`),
   createAdminUser: (username: string, role: AccountRole) =>
     request<CreatedUser>('/api/admin/users', { method: 'POST', body: { username, role } }),
-  updateAdminUser: (id: number, patch: { role?: AccountRole; disabled?: boolean }) =>
+  updateAdminUser: (
+    id: number,
+    patch: { role?: AccountRole; disabled?: boolean; tier?: AccountTier; vipUntil?: string | null },
+  ) =>
     request<{ account: AdminAccount }>(`/api/admin/users/${id}`, { method: 'PATCH', body: patch }),
   resetAdminUserPassword: (id: number) =>
     request<{ tempPassword: string }>(`/api/admin/users/${id}/reset-password`, { method: 'POST' }),

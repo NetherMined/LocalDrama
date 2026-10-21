@@ -1,5 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
-import { api, type ClientPlaybackEvent } from '../api'
+import { api, lockedEpisodeOf, type ClientPlaybackEvent, type LockedEpisode } from '../api'
 import { useHlsSource, type HlsSource } from '../hooks/useHlsSource'
 import { errorMessage, fmtEpisode } from '../lib/format'
 import { isIpadDesktop } from '../lib/userAgent'
@@ -41,6 +41,8 @@ export interface PlayerShellProps {
   /** Called after the shell switches episode itself (next, autoplay, replay). */
   onChange?: (key: string) => void
   onClose?: () => void
+  /** The stream refused the episode as VIP-only; the shell closes instead of showing an error. */
+  onLocked?: (key: string, locked: LockedEpisode) => void
   showTitle: string
   poster?: string
   /** Keep the player on screen before anything is loaded (downloads page). */
@@ -153,6 +155,7 @@ export function PlayerShell({
   onSave,
   onChange,
   onClose,
+  onLocked,
   showTitle,
   poster,
   alwaysVisible = false,
@@ -192,11 +195,11 @@ export function PlayerShell({
   const nativeFsOnPlayRef = useRef(false)
   const startWatchdogRef = useRef<number | null>(null)
   const stallWatchdogRef = useRef<number | null>(null)
-  const latest = useRef({ episodes, resolve, onSave, onChange, onClose, telemetry })
+  const latest = useRef({ episodes, resolve, onSave, onChange, onClose, onLocked, telemetry })
   const switchRef = useRef<(key: string) => void>(() => undefined)
 
   useEffect(() => {
-    latest.current = { episodes, resolve, onSave, onChange, onClose, telemetry }
+    latest.current = { episodes, resolve, onSave, onChange, onClose, onLocked, telemetry }
     switchRef.current = switchTo
   })
 
@@ -372,6 +375,12 @@ export function PlayerShell({
       (err: unknown) => {
         if (token !== loadTokenRef.current) return
         pendingPlayRef.current = false
+        const locked = lockedEpisodeOf(err)
+        if (locked) {
+          latest.current.onLocked?.(key, locked)
+          close()
+          return
+        }
         clearWatchdogs()
         setStuck(null)
         setStatus('error')
