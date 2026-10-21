@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 
 const arrowClass =
-  'absolute inset-y-0 z-10 hidden w-12 items-center justify-center text-white opacity-0 transition duration-200 group-hover:opacity-100 focus-visible:opacity-100 md:flex'
+  'absolute inset-y-0 z-10 hidden w-12 items-center justify-center text-white opacity-0 transition duration-200 group-hover/row:opacity-100 focus-visible:opacity-100 md:flex'
 
 export function ShowRow<T>({
   id,
@@ -52,7 +52,7 @@ export function ShowRow<T>({
         </h2>
         {action}
       </div>
-      <div className="group relative">
+      <div className="group/row relative">
         <ul
           ref={scroller}
           onScroll={updateEdges}

@@ -280,13 +280,13 @@ export function AdminUserDetail() {
                         <li key={show.bookId}>
                           <Link
                             to={showPath(show)}
-                            className="group flex items-center gap-4 rounded-md py-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-hi"
+                            className="group/user flex items-center gap-4 rounded-md py-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-hi"
                           >
                             <div className="w-24 shrink-0 overflow-hidden rounded-md sm:w-32">
                               <Poster src={show.cover} name={show.name} aspect="landscape" />
                             </div>
                             <div className="min-w-0">
-                              <p className="line-clamp-1 font-medium group-hover:text-accent-hi">{show.name}</p>
+                              <p className="line-clamp-1 font-medium group-hover/user:text-accent-hi">{show.name}</p>
                               <p className="mt-1 text-xs text-muted">
                                 {w.episodes} {w.episodes === 1 ? 'episode' : 'episodes'} · last watched{' '}
                                 {fmtAgo(w.lastWatchedAt)}

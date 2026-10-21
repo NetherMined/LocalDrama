@@ -1,4 +1,4 @@
-import { getConfig } from '../config.js';
+import { getConfig, isKeyOnly } from '../config.js';
 import { parseCount } from '../normalize.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -173,7 +173,7 @@ export function registerHomeRoutes(app, ctx) {
     // payload for five minutes.
     const signature = [
       cfg.activeSourceId,
-      ...(cfg.sources || []).filter((s) => s.enabled).map((s) => s.id),
+      ...(cfg.sources || []).filter((s) => s.enabled && !isKeyOnly(s)).map((s) => s.id),
     ].join('|');
     if (!refresh && cache && cache.signature === signature && Date.now() - cache.at < CACHE_TTL_MS) {
       return cache.value;

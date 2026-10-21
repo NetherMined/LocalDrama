@@ -111,27 +111,33 @@ export const netShort = {
   },
 };
 
+const DRAMABOX_FEEDS = ['/api/dramabox/trending', '/api/dramabox/latest', '/api/dramabox/foryou'];
+
+function unwrapList(data) {
+  const raw = Array.isArray(data) ? data : data?.data || data?.results || data?.items || [];
+  return Array.isArray(raw) ? raw : [];
+}
+
 export const dramaBox = {
   id: 'dramabox',
   host: 'dramabox.goodbos.online',
   label: 'DramaBox',
 
   async latest(ctx, { page = 1 } = {}) {
-    const data = await ctx.request('/api/dramabox/trending', { lang: ctx.lang, page });
-    const raw = Array.isArray(data) ? data : data.data || data.results || data.items || [];
-    const items = dedupe((Array.isArray(raw) ? raw : []).map(mapDramaBox));
-    return { items, hasMore: items.length >= 10 };
+    // The upstream feeds ignore `page` (page 2 repeats page 1), so there is only one page.
+    if (page > 1) return { items: [], hasMore: false };
+    const feeds = await Promise.allSettled(
+      DRAMABOX_FEEDS.map((path) => ctx.request(path, { lang: ctx.lang, page: 1 })),
+    );
+    if (feeds.every((f) => f.status === 'rejected')) throw feeds[0].reason;
+    const raw = feeds.flatMap((f) => (f.status === 'fulfilled' ? unwrapList(f.value) : []));
+    return { items: dedupe(raw.map(mapDramaBox)), hasMore: false };
   },
 
   async search(ctx, { q, page = 1 } = {}) {
-    const data = await ctx.request('/api/dramabox/search', {
-      query: q,
-      lang: ctx.lang,
-      page,
-    });
-    const raw = Array.isArray(data) ? data : data.data || data.results || data.items || [];
-    const items = dedupe((Array.isArray(raw) ? raw : []).map(mapDramaBox));
-    return { items, hasMore: items.length >= 10 };
+    if (page > 1) return { items: [], hasMore: false };
+    const data = await ctx.request('/api/dramabox/search', { query: q, lang: ctx.lang, page: 1 });
+    return { items: dedupe(unwrapList(data).map(mapDramaBox)), hasMore: false };
   },
 
   async chapters(ctx, bookId) {

@@ -60,6 +60,11 @@ export function defaultSources() {
   ];
 }
 
+// The dramabuzz entry only stores the shared GoodBos API key. It is not a catalogue.
+export function isKeyOnly(source) {
+  return source?.type === 'dramabuzz';
+}
+
 export const DEFAULT_CONFIG = {
   downloadRoot: '',
   language: 'en',

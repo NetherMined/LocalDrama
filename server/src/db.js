@@ -285,6 +285,20 @@ export function toShow(row) {
   };
 }
 
+// Before the shared DramaBuzz key was made key-only, DramaBox shows were written with the
+// DramaBuzz source id, and some DramaBox rows never got one. Both fixes are idempotent.
+const DRAMABOX_ID_GLOB = '4[12]000[0-9]*';
+
+function repairShowSources(raw) {
+  const relabel = raw.prepare("UPDATE shows SET sourceId = 'dramabox' WHERE sourceId = 'dramabuzz'");
+  const fillNull = raw.prepare(`UPDATE shows SET sourceId = 'dramabox'
+    WHERE sourceId IS NULL AND bookId GLOB '${DRAMABOX_ID_GLOB}' AND length(bookId) = 11`);
+  return raw.transaction(() => ({
+    relabelled: relabel.run().changes,
+    filled: fillNull.run().changes,
+  }))();
+}
+
 export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
   const raw = new Database(path.join(dataDir, 'library.db'));
@@ -321,6 +335,9 @@ export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
   return {
     raw,
     upsertShows,
+    repairShowSources() {
+      return repairShowSources(raw);
+    },
     getShow(bookId) {
       const row = getShowStmt.get(String(bookId));
       return row ? toShow(row) : null;

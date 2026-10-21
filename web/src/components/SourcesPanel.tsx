@@ -125,31 +125,39 @@ export function SourcesPanel() {
     <div className="space-y-4">
       {notice && <NoticeText notice={notice} />}
       <p className="text-sm text-muted">
-        All GoodBos platforms share the same API key (set on the DramaBuzz / GoodBos entry). Toggle platforms on or off.
+        All GoodBos platforms share one API key (set in the Shared GoodBos API key entry). Toggle platforms on or off.
       </p>
       {data.sources.map((s) => {
-        const isActive = s.id === data.activeSourceId
+        const keyOnly = s.type === 'dramabuzz'
+        const isActive = !keyOnly && s.id === data.activeSourceId
         const health = s.lastHealth
         const statusColor = !health ? 'bg-zinc-500' : health.ok ? 'bg-emerald-500' : 'bg-red-500'
         return (
           <div key={s.id} className="rounded-lg border border-line p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <label className="flex min-h-11 items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={s.enabled}
-                  disabled={busy === s.id}
-                  onChange={(e) => void toggleEnabled(s.id, e.target.checked)}
-                  className="h-4 w-4 accent-rose-500"
-                />
-                <span className="text-sm">Enabled</span>
-              </label>
+              {!keyOnly && (
+                <label className="flex min-h-11 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={s.enabled}
+                    disabled={busy === s.id}
+                    onChange={(e) => void toggleEnabled(s.id, e.target.checked)}
+                    className="h-4 w-4 accent-rose-500"
+                  />
+                  <span className="text-sm">Enabled</span>
+                </label>
+              )}
               <span className={`inline-block h-3 w-3 rounded-full ${statusColor}`} />
               <div className="flex-1">
                 <div className="font-medium">
-                  {s.name} {isActive && <span className="ml-2 text-xs text-emerald-400">ACTIVE</span>}
+                  {keyOnly ? 'Shared GoodBos API key' : s.name}{' '}
+                  {isActive && <span className="ml-2 text-xs text-emerald-400">ACTIVE</span>}
                 </div>
-                <div className="text-xs text-muted">{s.type}{s.config.base ? ` · ${s.config.base}` : ''}</div>
+                <div className="text-xs text-muted">
+                  {keyOnly
+                    ? 'Used by every GoodBos platform. Not a separate catalogue.'
+                    : `${s.type}${s.config.base ? ` · ${s.config.base}` : ''}`}
+                </div>
               </div>
               <div className="flex gap-2">
                 <button
@@ -160,7 +168,7 @@ export function SourcesPanel() {
                 >
                   {busy === s.id ? 'Testing…' : 'Test'}
                 </button>
-                {!isActive && s.enabled && (
+                {!keyOnly && !isActive && s.enabled && (
                   <button
                     type="button"
                     disabled={busy === s.id}

@@ -123,17 +123,17 @@ export function Profiles() {
               onClick={() => pickProfile(profile)}
               disabled={choosingId !== null}
               aria-label={profile.hasPin ? `${profile.name}, PIN required` : profile.name}
-              className="group flex flex-col items-center gap-3 rounded-xl outline-none disabled:opacity-60"
+              className="group/profile flex flex-col items-center gap-3 rounded-xl outline-none disabled:opacity-60"
             >
               <span
                 aria-hidden="true"
                 style={{ backgroundColor: profile.color }}
-                className="flex h-32 w-32 items-center justify-center gap-2 rounded-xl text-5xl font-bold text-white shadow-lg shadow-black/40 transition group-hover:scale-105 group-hover:ring-4 group-hover:ring-white/80 group-focus-visible:ring-4 group-focus-visible:ring-white sm:h-40 sm:w-40"
+                className="flex h-32 w-32 items-center justify-center gap-2 rounded-xl text-5xl font-bold text-white shadow-lg shadow-black/40 transition group-hover/profile:scale-105 group-hover/profile:ring-4 group-hover/profile:ring-white/80 group-focus-visible/profile:ring-4 group-focus-visible/profile:ring-white sm:h-40 sm:w-40"
               >
                 {profileInitial(profile.name)}
                 {profile.hasPin && <LockIcon className="h-5 w-5 opacity-80" />}
               </span>
-              <span className="max-w-36 truncate text-base font-medium text-white/90 group-hover:text-white">
+              <span className="max-w-36 truncate text-base font-medium text-white/90 group-hover/profile:text-white">
                 {choosingId === profile.id ? 'Opening...' : profile.name}
               </span>
             </button>

@@ -81,12 +81,12 @@ export function Library() {
             <Link
               key={show.bookId}
               to={`/library/${encodeURIComponent(show.bookId)}`}
-              className="group block rounded-md outline-none"
+              className="group/card block rounded-md outline-none"
             >
-              <div className="overflow-hidden rounded-md transition duration-200 group-hover:scale-[1.03] group-hover:shadow-xl group-hover:shadow-black/60 group-focus-visible:ring-2 group-focus-visible:ring-accent-hi">
+              <div className="overflow-hidden rounded-md transition duration-200 group-hover/card:scale-[1.03] group-hover/card:shadow-xl group-hover/card:shadow-black/60 group-focus-visible/card:ring-2 group-focus-visible/card:ring-accent-hi">
                 <Poster src={show.cover} name={show.name} />
               </div>
-              <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-white/90 group-hover:text-white">
+              <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-white/90 group-hover/card:text-white">
                 {show.name}
               </p>
               <p className="mt-0.5 text-xs text-muted">{show.downloaded} downloaded</p>

@@ -22,8 +22,8 @@ export function ShowCard({ show, to, progress, caption }: ShowCardProps) {
   const percent = progress === undefined ? null : Math.round(Math.min(1, Math.max(0, progress)) * 100)
   const subtitle = caption ?? show.tags[0] ?? show.sourceName ?? null
   return (
-    <Link to={to ?? showPath(show)} className="group block rounded-md outline-none">
-      <div className="relative overflow-hidden rounded-md bg-panel-2 ring-0 ring-accent-hi transition duration-200 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-black/70 group-hover:ring-2 group-hover:ring-white/40 group-focus-visible:ring-2">
+    <Link to={to ?? showPath(show)} className="group/card block rounded-md outline-none">
+      <div className="relative overflow-hidden rounded-md bg-panel-2 ring-0 ring-accent-hi transition duration-200 group-hover/card:scale-105 group-hover/card:shadow-xl group-hover/card:shadow-black/70 group-hover/card:ring-2 group-hover/card:ring-white/40 group-focus-visible/card:ring-2">
         <Poster src={show.cover} name={show.name} aspect="landscape" />
         {show.sourceName && (
           <span className="absolute top-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-rose-500 uppercase">
@@ -35,7 +35,7 @@ export function ShowCard({ show, to, progress, caption }: ShowCardProps) {
             {show.episodeCount} ep
           </span>
         )}
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition duration-200 group-hover:opacity-100">
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition duration-200 group-hover/card:opacity-100">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-black/60">
             <PlayIcon className="h-5 w-5 translate-x-px" />
           </span>
@@ -53,7 +53,7 @@ export function ShowCard({ show, to, progress, caption }: ShowCardProps) {
           </div>
         )}
       </div>
-      <p className="mt-2 line-clamp-1 text-sm font-medium text-white/90 group-hover:text-white">{show.name}</p>
+      <p className="mt-2 line-clamp-1 text-sm font-medium text-white/90 group-hover/card:text-white">{show.name}</p>
       {subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-muted">{subtitle}</p>}
     </Link>
   )

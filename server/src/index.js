@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DATA_DIR, getConfig, loadConfig } from './config.js';
+import { DATA_DIR, getConfig, isKeyOnly, loadConfig, saveConfig } from './config.js';
 import { openDb } from './db.js';
 import { createAuth } from './auth.js';
 import { createAccounts } from './accounts.js';
@@ -53,6 +53,14 @@ const accounts = createAccounts(db, { events });
 await accounts.seedDefaultAdmin();
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
+
+const sourceRepair = db.repairShowSources();
+app.log.info(`Show source repair: ${sourceRepair.relabelled} DramaBuzz rows set to dramabox, ${sourceRepair.filled} unlabelled DramaBox rows set to dramabox`);
+
+if (isKeyOnly(config.sources?.find((s) => s.id === config.activeSourceId))) {
+  saveConfig({ activeSourceId: 'dramabox' });
+  app.log.info('Active source pointed at the shared key entry (dramabuzz); switched to dramabox');
+}
 
 const provider = createMultiProvider({
   mock: MOCK,

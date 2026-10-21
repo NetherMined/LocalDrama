@@ -488,3 +488,32 @@ Each phase stops for confirmation before the next.
 2. Applies everywhere ShowGrid is used (Browse, Search, Favourites, Account favourites).
 
 Each phase stops for confirmation before the next.
+
+---
+
+# Ticket: DramaBox duplicated by DramaBuzz, DramaBox missing in search, row-wide hover (2026-10-21)
+
+## Findings
+- The "DramaBuzz / GoodBos (shared key)" source (type `dramabuzz`, enabled) calls the **same** upstream as the
+  DramaBox platform (`dramabox.goodbos.online/api/dramabox/trending` and `/search`). Home shows two identical
+  rows, Browse lists it as a platform, and search fans out to both. Shows are keyed by bookId alone, so each
+  duplicate overwrites the other's `sourceId`: DramaBox titles end up labelled DramaBuzz.
+- DramaBox upstream: `trending`, `latest`, `foryou` are three different lists (20 / 20 / 10) and none paginate
+  (page 2 = page 1); `search` doesn't paginate either. Search results include `type: "actor"` entries without
+  a bookId (correctly dropped). Every other `/api/dramabox/*` path tried is 404.
+- Hover: `ShowRow`'s container has `group` (for its scroll arrows) and `ShowCard` uses unnamed `group-hover:`,
+  so hovering anywhere in a row highlights every card in it.
+
+## Phase 1 (single phase)
+1. DramaBuzz becomes **key-only**: kept in config as the shared API key holder (Settings still edits it), but
+   excluded from `listEnabledSources()` (Browse platform list, Home rows, search fan-out) and from activation;
+   if it is the active source, switch to `dramabox`. Settings labels it "Shared GoodBos API key".
+2. Data repair (idempotent on start): `UPDATE shows SET sourceId = 'dramabox' WHERE sourceId = 'dramabuzz'`;
+   rows with NULL sourceId whose bookId matches DramaBox's numeric 41/42-prefixed pattern → `dramabox`.
+3. DramaBox browse: merge `trending` + `latest` + `foryou` (deduped, ~40 titles), `hasMore: false` so the
+   grid doesn't re-request identical pages; search: `hasMore: false`.
+4. Hover: `ShowCard` → `group/card` + `group-hover/card:*`; `ShowRow` → `group/row` + `group-hover/row:*`;
+   check other `group` users for the same leak.
+5. Verify on a data copy: Home has one DramaBox row and no DramaBuzz row; `/api/browse/sources` has no
+   DramaBuzz; searching a DramaBox title (e.g. "Love's Encore", "He Broke the Heart") returns it labelled
+   DramaBox once; hover screenshot shows only the hovered card scaled.

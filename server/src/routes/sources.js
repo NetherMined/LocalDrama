@@ -1,4 +1,4 @@
-import { getConfig, saveConfig } from '../config.js';
+import { getConfig, isKeyOnly, saveConfig } from '../config.js';
 import { listSourceTypes, testSource } from '../sources.js';
 import { platformKind } from '../goodbosPlatforms.js';
 import { httpError } from '../errors.js';
@@ -47,6 +47,7 @@ export function registerSourceRoutes(app, ctx) {
     const cfg = getConfig();
     const source = cfg.sources.find((s) => s.id === id);
     if (!source) throw httpError(404, 'Source not found');
+    if (isKeyOnly(source)) throw httpError(400, 'This entry only holds the shared API key');
     if (!source.enabled) throw httpError(400, 'Source is not enabled');
     if (source.type === 'goodbos') {
       if (platformKind(source) === 'unsupported') {
