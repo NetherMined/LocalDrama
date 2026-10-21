@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { parseUserAgent } from './lib/userAgent'
 
 export type DownloadStatus = 'queued' | 'downloading' | 'paused' | 'completed' | 'failed'
 
@@ -502,9 +503,52 @@ function watchPath(bookId: string, index: number) {
   return `/api/watch/${enc(bookId)}/${index}`
 }
 
+export type ClientPlaybackEvent =
+  | 'stream_url_failed'
+  | 'media_error'
+  | 'hls_fatal'
+  | 'watchdog_timeout'
+  | 'stall_timeout'
+  | 'play_rejected'
+  | 'fullscreen_failed'
+
+export interface ClientLogPayload {
+  event: ClientPlaybackEvent
+  platform?: string
+  bookId?: string
+  episode?: number
+  code?: number
+  message?: string
+  details?: string
+  /** Host only; the server drops anything else. */
+  src?: string
+}
+
+// Telemetry must never break playback, so this never throws and never waits for a reply.
+function sendClientLog(payload: ClientLogPayload): void {
+  try {
+    const userAgent = navigator.userAgent
+    const body = JSON.stringify({ ...payload, ...parseUserAgent(userAgent), userAgent })
+    if (typeof navigator.sendBeacon === 'function') {
+      const sent = navigator.sendBeacon('/api/client-log', new Blob([body], { type: 'application/json' }))
+      if (sent) return
+    }
+    void fetch('/api/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    }).catch(() => undefined)
+  } catch {
+    // Telemetry is best effort.
+  }
+}
+
 const enc = encodeURIComponent
 
 export const api = {
+  clientLog: sendClientLog,
+
   status: () => request<AppStatus>('/api/status'),
   setupDefaults: () => request<SetupDefaults>('/api/setup/defaults'),
   validatePath: (path: string) =>

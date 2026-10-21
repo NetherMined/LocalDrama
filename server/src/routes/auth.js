@@ -16,7 +16,7 @@ const USER_WINDOW_MS = 15 * 60 * 1000;
 const USER_MAX_ATTEMPTS = 10;
 const MAX_TRACKED_KEYS = 10000;
 
-function limiter(windowMs, max) {
+export function limiter(windowMs, max) {
   const hits = new Map();
   return (key) => {
     const now = Date.now();

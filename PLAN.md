@@ -453,3 +453,38 @@ Each phase stops for confirmation before the next.
    dialog's QR code; verify Chrome's install prompt appears.
 
 Each phase stops for confirmation before the next.
+
+---
+
+# Ticket: Videos not loading + infinite scroll (2026-10-20)
+
+## Findings
+- **iPhone/iPad (confirmed bug):** `PlayerShell.enterFullscreen()` calls `video.webkitEnterFullscreen()` before
+  the video has a source. Safari throws `InvalidStateError` synchronously, which aborts `play()` before the
+  stream is requested, so nothing loads.
+- **Desktop: not reproduced.** Headless Chrome plays all 10 working platforms (DramaBox, NetShort, ReelShort,
+  ShortMax, GoodShort, FlickReels, DramaBite, Vibeshort, Serial+, plus HLS ones through /api/hls), both on
+  localhost and on http://192.168.1.111, with Chrome's normal autoplay policy. Container logs reset on each
+  rebuild, so the failed attempts weren't captured. Storyreel's episode list is just slow (>4 s upstream).
+- Grids use a "Load more" button (ShowGrid).
+
+## Phase 1: Video fixes + diagnostics
+1. Fullscreen never blocks playback: wrap every fullscreen/orientation call in try/catch. On iOS play inline
+   (`playsInline`) and enter native fullscreen only once the video has metadata (from the same tap where
+   possible, otherwise via the fullscreen button).
+2. Loading watchdog: if an episode hasn't started after 15 s, show "Taking longer than usual" with Retry /
+   Next; a stalled stream (`stalled`/`waiting` > 20 s) shows the same.
+3. Client playback telemetry: `POST /api/client-log` (signed-in, rate-limited, size-capped) records
+   {event, platform, bookId, episode, browser/OS, media error code/message, hls details}, written to the server
+   log, so real-device failures show up in `docker logs`. Fired on stream-URL failure, media error, HLS fatal
+   error, watchdog timeout, and play() rejection.
+4. Re-test: all platforms in headless Chrome + Firefox if available, mobile emulation.
+
+## Phase 2: Infinite scroll
+1. ShowGrid: IntersectionObserver sentinel (rootMargin 800 px) loads the next page automatically; one request
+   in flight; stops at `hasMore: false` with a quiet "You've reached the end"; on error shows Retry inline;
+   keeps a visually hidden "Load more" button for keyboard/screen-reader users; `aria-live` announces
+   "Loaded N more".
+2. Applies everywhere ShowGrid is used (Browse, Search, Favourites, Account favourites).
+
+Each phase stops for confirmation before the next.

@@ -294,6 +294,7 @@ export function Show() {
         onClose={onPlayerClose}
         showTitle={title}
         poster={show?.cover}
+        telemetry={{ platform: source, bookId }}
       />
 
       <section aria-label="Drama details" className="relative isolate overflow-hidden rounded-xl border border-line bg-panel">

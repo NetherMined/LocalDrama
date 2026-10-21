@@ -104,6 +104,7 @@ export function Watch() {
         showTitle={showName}
         poster={detail.show?.cover}
         alwaysVisible
+        telemetry={{ bookId }}
       />
 
       <div className="min-w-0">

@@ -19,7 +19,7 @@ interface HlsInstance {
 export function useHlsSource(
   videoRef: RefObject<HTMLVideoElement | null>,
   source: HlsSource | null,
-  onError?: (message: string) => void,
+  onError?: (message: string, details?: string) => void,
 ) {
   const errorRef = useRef(onError)
 
@@ -48,7 +48,7 @@ export function useHlsSource(
         const hlsInstance = new Hls({ enableWorker: true }) as unknown as HlsInstance
         instance = hlsInstance
         hlsInstance.on?.('hlsError', (_event, data) => {
-          if (data.fatal) errorRef.current?.(data.details || 'The stream stopped working.')
+          if (data.fatal) errorRef.current?.(data.details || 'The stream stopped working.', data.details)
         })
         hlsInstance.loadSource(src)
         hlsInstance.attachMedia(video)

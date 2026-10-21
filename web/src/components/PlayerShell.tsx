@@ -1,6 +1,8 @@
 import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
+import { api, type ClientPlaybackEvent } from '../api'
 import { useHlsSource, type HlsSource } from '../hooks/useHlsSource'
 import { errorMessage, fmtEpisode } from '../lib/format'
+import { isIpadDesktop } from '../lib/userAgent'
 import { CloseIcon, ExitFullscreenIcon, FullscreenIcon, PlayIcon, SkipBackIcon, SkipForwardIcon } from './icons'
 import { buttonClass } from './ui'
 
@@ -43,16 +45,22 @@ export interface PlayerShellProps {
   poster?: string
   /** Keep the player on screen before anything is loaded (downloads page). */
   alwaysVisible?: boolean
+  /** Context for playback diagnostics sent to the server log. */
+  telemetry?: { platform?: string; bookId: string }
 }
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 type TapHint = 'unmute' | 'play' | null
+type Stuck = 'start' | 'stall' | null
 interface Snapshot {
   key: string
   position: number
   duration: number
 }
-type VideoWithWebkit = HTMLVideoElement & { webkitEnterFullscreen?: () => void }
+type VideoWithWebkit = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void
+  webkitSupportsFullscreen?: boolean
+}
 
 const SAVE_INTERVAL_MS = 10_000
 const UP_NEXT_SECONDS = 10
@@ -60,6 +68,8 @@ const UNKNOWN_END_COUNTDOWN_SECONDS = 5
 const PREFETCH_SECONDS = 15
 const CHROME_HIDE_MS = 3_000
 const SEEK_SECONDS = 10
+const WATCHDOG_START_MS = 15_000
+const WATCHDOG_STALL_MS = 20_000
 const AUTOPLAY_STORAGE_KEY = 'dramaus.autoplay'
 
 function readAutoplay(): boolean {
@@ -86,7 +96,31 @@ function orientationApi(): OrientationApi | undefined {
 }
 
 function lockLandscape() {
-  void orientationApi()?.lock?.('landscape')?.catch(() => undefined)
+  try {
+    void orientationApi()?.lock?.('landscape')?.catch(() => undefined)
+  } catch {
+    // Orientation lock is not supported here.
+  }
+}
+
+// iOS and iPadOS only offer the native video fullscreen, and only once the video has a source.
+function usesNativeVideoFullscreen(video: VideoWithWebkit): boolean {
+  if (typeof video.webkitEnterFullscreen !== 'function') return false
+  return !document.fullscreenEnabled || isIpadDesktop()
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Error) return `${err.name}: ${err.message}`
+  return String(err)
+}
+
+function hostOf(url: string | null): string | undefined {
+  if (!url) return undefined
+  try {
+    return new URL(url, window.location.href).hostname
+  } catch {
+    return undefined
+  }
 }
 
 function unlockOrientation() {
@@ -120,6 +154,7 @@ export function PlayerShell({
   showTitle,
   poster,
   alwaysVisible = false,
+  telemetry,
 }: PlayerShellProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -128,6 +163,7 @@ export function PlayerShell({
   const [status, setStatus] = useState<LoadStatus>('idle')
   const [errorText, setErrorText] = useState<string | null>(null)
   const [tapHint, setTapHint] = useState<TapHint>(null)
+  const [stuck, setStuck] = useState<Stuck>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [paused, setPaused] = useState(true)
   const [chromeVisible, setChromeVisible] = useState(true)
@@ -148,13 +184,71 @@ export function PlayerShell({
   const cancelledRef = useRef(false)
   const hideTimerRef = useRef<number | null>(null)
   const lastSaveRef = useRef(0)
-  const latest = useRef({ episodes, resolve, onSave, onChange, onClose })
+  const srcRef = useRef<string | null>(null)
+  const playedRef = useRef(false)
+  const nativeFsOnPlayRef = useRef(false)
+  const startWatchdogRef = useRef<number | null>(null)
+  const stallWatchdogRef = useRef<number | null>(null)
+  const latest = useRef({ episodes, resolve, onSave, onChange, onClose, telemetry })
   const switchRef = useRef<(key: string) => void>(() => undefined)
 
   useEffect(() => {
-    latest.current = { episodes, resolve, onSave, onChange, onClose }
+    latest.current = { episodes, resolve, onSave, onChange, onClose, telemetry }
     switchRef.current = switchTo
   })
+
+  // Sends a playback problem to the server log. Never throws; the player keeps working without it.
+  function report(event: ClientPlaybackEvent, extra: { code?: number; message?: string; details?: string } = {}) {
+    const { telemetry: context, episodes: list } = latest.current
+    const key = activeKeyRef.current
+    const episode = key ? list.find((ep) => ep.key === key) : undefined
+    api.clientLog({
+      event,
+      platform: context?.platform,
+      bookId: context?.bookId,
+      episode: episode?.index,
+      src: hostOf(srcRef.current),
+      ...extra,
+    })
+  }
+
+  function reportFullscreenFailure(err: unknown) {
+    report('fullscreen_failed', { message: describeError(err) })
+  }
+
+  function reportPlayRejected(err: unknown) {
+    report('play_rejected', { message: describeError(err) })
+  }
+
+  function clearWatchdogs() {
+    clearTimer(startWatchdogRef.current)
+    clearTimer(stallWatchdogRef.current)
+    startWatchdogRef.current = null
+    stallWatchdogRef.current = null
+  }
+
+  function armStartWatchdog(token: number) {
+    startWatchdogRef.current = window.setTimeout(() => {
+      startWatchdogRef.current = null
+      if (token !== loadTokenRef.current) return
+      const video = videoRef.current
+      // A ready video that is paused is waiting on a tap or a button, not stuck.
+      if (video && readyRef.current && video.paused) return
+      setStuck('start')
+      report('watchdog_timeout')
+    }, WATCHDOG_START_MS)
+  }
+
+  function armStallWatchdog() {
+    if (!playedRef.current || stallWatchdogRef.current !== null) return
+    stallWatchdogRef.current = window.setTimeout(() => {
+      stallWatchdogRef.current = null
+      const video = videoRef.current
+      if (!video || video.paused || !readyRef.current) return
+      setStuck('stall')
+      report('stall_timeout')
+    }, WATCHDOG_STALL_MS)
+  }
 
   // Reads the playhead when the video is live; otherwise falls back to the last sample for the active episode.
   // The unmount path relies on the fallback because React may have detached the element by then.
@@ -182,34 +276,56 @@ export function PlayerShell({
         video.muted = true
         video.play().then(
           () => setTapHint('unmute'),
-          () => setTapHint('play'),
+          (retryErr: unknown) => {
+            setTapHint('play')
+            reportPlayRejected(retryErr)
+          },
         )
         return
       }
       setTapHint('play')
+      reportPlayRejected(err)
     })
   }
 
   function enterFullscreen() {
     const root = rootRef.current
     const video = videoRef.current as VideoWithWebkit | null
-    if (root && document.fullscreenEnabled) {
-      root.requestFullscreen().catch(() => undefined)
-    } else {
-      // iOS Safari only offers the native video fullscreen.
-      video?.webkitEnterFullscreen?.()
+    try {
+      if (video && usesNativeVideoFullscreen(video)) {
+        video.webkitEnterFullscreen?.()
+      } else if (root) {
+        const request = root.requestFullscreen()
+        void request?.catch?.(reportFullscreenFailure)
+      }
+    } catch (err) {
+      reportFullscreenFailure(err)
     }
     lockLandscape()
   }
 
   function exitFullscreen() {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen()?.catch?.(() => undefined)
+    } catch {
+      // Already left fullscreen, or the browser refused; playback is unaffected.
+    }
     unlockOrientation()
   }
 
-  function startKey(key: string) {
+  // Native fullscreen on iOS is only allowed while playback runs, so it is requested from the first playing event.
+  function enterNativeOnPlay(video: VideoWithWebkit) {
+    if (!video.webkitSupportsFullscreen) return
+    try {
+      video.webkitEnterFullscreen?.()
+    } catch (err) {
+      reportFullscreenFailure(err)
+    }
+  }
+
+  function startKey(key: string, options: { fresh?: boolean; resumeFrom?: number } = {}) {
     const video = videoRef.current
-    if (key === activeKeyRef.current && readyRef.current && video) {
+    if (!options.fresh && key === activeKeyRef.current && readyRef.current && video) {
       if (video.ended) video.currentTime = 0
       setFinished(false)
       tryPlay(video)
@@ -225,6 +341,9 @@ export function PlayerShell({
     cancelledRef.current = false
     activeKeyRef.current = key
     const token = ++loadTokenRef.current
+    clearWatchdogs()
+    playedRef.current = false
+    setStuck(null)
     setActiveKey(key)
     setSource(null)
     setStatus('loading')
@@ -237,31 +356,51 @@ export function PlayerShell({
     setPaused(true)
     setChromeVisible(true)
 
-    const prefetched = prefetchRef.current?.key === key ? prefetchRef.current.promise : null
+    const prefetched = !options.fresh && prefetchRef.current?.key === key ? prefetchRef.current.promise : null
     prefetchRef.current = null
     const pending = prefetched ?? (async () => latest.current.resolve(key))()
     pending.then(
       (resolved) => {
         if (token !== loadTokenRef.current) return
-        startAtRef.current = resolved.startAt
+        startAtRef.current = options.resumeFrom ?? resolved.startAt
+        srcRef.current = resolved.src
         setSource({ src: resolved.src, hls: resolved.hls })
       },
       (err: unknown) => {
         if (token !== loadTokenRef.current) return
         pendingPlayRef.current = false
+        clearWatchdogs()
+        setStuck(null)
         setStatus('error')
         setErrorText(errorMessage(err))
+        report('stream_url_failed', { message: describeError(err) })
       },
     )
+    armStartWatchdog(token)
   }
 
   function playKey(key: string, fullscreenNow: boolean) {
     const root = rootRef.current
     // The root may still be hidden from the idle state; it has to be rendered before requestFullscreen runs.
     if (root) root.hidden = false
-    if (fullscreenNow) enterFullscreen()
-    startKey(key)
+    const video = videoRef.current as VideoWithWebkit | null
+    const deferNative = fullscreenNow && video !== null && usesNativeVideoFullscreen(video)
+    nativeFsOnPlayRef.current = deferNative
+    try {
+      if (fullscreenNow && !deferNative) enterFullscreen()
+    } finally {
+      startKey(key)
+    }
     root?.focus({ preventScroll: true })
+  }
+
+  function retryStuck() {
+    const key = activeKeyRef.current
+    if (!key) return
+    const video = videoRef.current
+    // A stalled video reloads its stream and resumes where it stopped.
+    const resumeFrom = stuck === 'stall' && video && readyRef.current && video.currentTime > 0 ? video.currentTime : undefined
+    startKey(key, { fresh: true, resumeFrom })
   }
 
   function switchTo(key: string) {
@@ -280,6 +419,8 @@ export function PlayerShell({
     exitFullscreen()
     clearTimer(hideTimerRef.current)
     hideTimerRef.current = null
+    clearWatchdogs()
+    setStuck(null)
     setActiveKey(null)
     setSource(null)
     setStatus('idle')
@@ -388,9 +529,12 @@ export function PlayerShell({
     [],
   )
 
-  useHlsSource(videoRef, source, (message) => {
+  useHlsSource(videoRef, source, (message, details) => {
+    clearWatchdogs()
+    setStuck(null)
     setStatus('error')
     setErrorText(message)
+    report('hls_fatal', { message, details })
   })
 
   useEffect(() => {
@@ -433,7 +577,15 @@ export function PlayerShell({
     }
     const onPlaying = () => {
       lastSaveRef.current = Date.now()
+      playedRef.current = true
+      clearWatchdogs()
+      setStuck(null)
+      if (nativeFsOnPlayRef.current) {
+        nativeFsOnPlayRef.current = false
+        enterNativeOnPlay(video)
+      }
     }
+    const onWaiting = () => armStallWatchdog()
     const onPause = () => {
       setPaused(true)
       setChromeVisible(true)
@@ -483,8 +635,11 @@ export function PlayerShell({
       if (!activeKeyRef.current || !video.error) return
       if (video.error.code === MediaError.MEDIA_ERR_ABORTED) return
       readyRef.current = false
+      clearWatchdogs()
+      setStuck(null)
       setStatus('error')
       setErrorText('The video could not be played.')
+      report('media_error', { code: video.error.code, message: video.error.message })
     }
     const onVolumeChange = () => {
       if (!video.muted) setTapHint((hint) => (hint === 'unmute' ? null : hint))
@@ -505,6 +660,8 @@ export function PlayerShell({
     video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('play', onPlay)
     video.addEventListener('playing', onPlaying)
+    video.addEventListener('waiting', onWaiting)
+    video.addEventListener('stalled', onWaiting)
     video.addEventListener('pause', onPause)
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('ended', onEnded)
@@ -520,6 +677,8 @@ export function PlayerShell({
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('play', onPlay)
       video.removeEventListener('playing', onPlaying)
+      video.removeEventListener('waiting', onWaiting)
+      video.removeEventListener('stalled', onWaiting)
       video.removeEventListener('pause', onPause)
       video.removeEventListener('timeupdate', onTimeUpdate)
       video.removeEventListener('ended', onEnded)
@@ -533,6 +692,7 @@ export function PlayerShell({
       flush(true)
       clearTimer(hideTimerRef.current)
       hideTimerRef.current = null
+      clearWatchdogs()
     }
   }, [])
 
@@ -630,7 +790,7 @@ export function PlayerShell({
         </div>
       </div>
 
-      {status === 'loading' && activeKey !== null && (
+      {status === 'loading' && activeKey !== null && stuck === null && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span
             role="status"
@@ -646,7 +806,28 @@ export function PlayerShell({
             <p className="font-semibold text-accent-hi">Could not play this episode</p>
             {errorText && <p className="mt-1 text-sm break-words text-white/80">{errorText}</p>}
             <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
-              <button type="button" onClick={() => startKey(activeKey)} className={buttonClass()}>
+              <button type="button" onClick={() => startKey(activeKey, { fresh: true })} className={buttonClass()}>
+                Retry
+              </button>
+              {next && (
+                <button type="button" onClick={() => switchTo(next.key)} className={buttonClass('ghost')}>
+                  Next episode
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stuck !== null && status !== 'error' && activeKey !== null && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-4">
+          <div role="alert" className="w-full max-w-sm rounded-lg border border-white/10 bg-panel p-5 text-center">
+            <p className="font-semibold">Taking longer than usual</p>
+            <p className="mt-1 text-sm text-muted">
+              {stuck === 'stall' ? 'The video stopped loading.' : 'This episode has not started yet.'}
+            </p>
+            <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
+              <button type="button" onClick={retryStuck} className={buttonClass()}>
                 Retry
               </button>
               {next && (
