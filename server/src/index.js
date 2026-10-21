@@ -15,6 +15,8 @@ import { createProfiles } from './profiles.js';
 import { createProgress } from './progress.js';
 import { createMdns } from './mdns.js';
 import { sendRanged } from './stream.js';
+import { createEntitlements } from './entitlements.js';
+import { createRewards } from './rewards.js';
 import { lanUrls, registerSystemRoutes, checkWritableDir, VERSION } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountRoutes } from './routes/account.js';
@@ -32,6 +34,7 @@ import { registerFavouriteRoutes } from './routes/favourites.js';
 import { registerHlsRoutes } from './routes/hls.js';
 import { registerClientLogRoutes } from './routes/clientLog.js';
 import { registerSocialRoutes } from './routes/social.js';
+import { registerRewardsRoutes } from './routes/rewards.js';
 import { createFollowChecker } from './follows.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +54,9 @@ const auth = createAuth(db.raw);
 const events = createEvents();
 const accounts = createAccounts(db, { events });
 await accounts.seedDefaultAdmin();
+
+const entitlements = createEntitlements(db);
+const rewards = createRewards(db, { accounts, entitlements });
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
@@ -88,6 +94,8 @@ const ctx = {
   profiles,
   progress,
   follows,
+  entitlements,
+  rewards,
   mdns,
   port: PORT,
   mock: MOCK,
@@ -96,7 +104,7 @@ const ctx = {
 app.setErrorHandler((err, req, reply) => {
   const status = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
   if (status >= 500) req.log.error(err);
-  reply.code(status).send({ error: err.message });
+  reply.code(status).send({ ...(err.details || {}), error: err.message });
 });
 
 app.addContentTypeParser('text/plain', { parseAs: 'string' }, (req, body, done) => {
@@ -138,12 +146,13 @@ registerProgressRoutes(app, ctx);
 registerWatchRoutes(app, ctx);
 registerSourceRoutes(app, ctx);
 registerBrowseRoutes(app, ctx);
-registerHlsRoutes(app);
+registerHlsRoutes(app, ctx);
 registerHomeRoutes(app, ctx);
 registerDownloadRoutes(app, ctx);
 registerLibraryRoutes(app, ctx);
 registerFavouriteRoutes(app, ctx);
 registerSocialRoutes(app, ctx);
+registerRewardsRoutes(app, ctx);
 registerClientLogRoutes(app);
 app.get('/api/events', (req, reply) => {
   events.subscribe(req, reply);

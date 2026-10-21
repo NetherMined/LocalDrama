@@ -10,11 +10,14 @@ export interface UpstreamStatus {
 }
 
 export type AccountRole = 'admin' | 'user'
+export type AccountTier = 'free' | 'vip'
 
 export interface AccountSummary {
   id: number
   username: string
   role: AccountRole
+  tier: AccountTier
+  vipUntil: string | null
   mustChangePassword: boolean
 }
 
@@ -172,6 +175,28 @@ export interface SetupInput {
   password?: string
 }
 
+// free: not VIP content; vip: VIP content this account can't watch yet; unlocked: VIP content it can watch.
+export type AccessLevel = 'free' | 'vip' | 'unlocked'
+
+export interface UnlockOption {
+  kind: 'series' | 'episodes' | 'platform'
+  cost: number
+  fromEp?: number
+  toEp?: number
+  ref?: string
+  hours?: number
+}
+
+// 403 body of /api/shows/:bookId/stream/:index when the episode is locked.
+export interface LockedEpisode {
+  error: 'vip_required'
+  reason: 'platform' | 'popular'
+  bookId: string
+  source: string | null
+  episode: number
+  options: UnlockOption[]
+}
+
 export interface Show {
   bookId: string
   name: string
@@ -183,6 +208,7 @@ export interface Show {
   status?: string
   source?: string | null
   sourceName?: string | null
+  access?: AccessLevel
 }
 
 export interface HomeRow {
@@ -236,6 +262,7 @@ export interface Episode {
   name: string
   downloaded: boolean
   downloadStatus?: DownloadStatus
+  access?: AccessLevel
 }
 
 export interface Page<T> {

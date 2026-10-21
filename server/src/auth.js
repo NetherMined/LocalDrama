@@ -75,6 +75,7 @@ export function toAccount(row) {
     username: row.username,
     role: row.role,
     tier: row.tier || 'free',
+    vipUntil: row.vipUntil ?? null,
     disabled: !!row.disabled,
     mustChangePassword: !!row.mustChangePassword,
     hasPassword: !!row.passwordHash,

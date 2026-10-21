@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import DramaboxClient from '@zhadev/dramabox';
-import { getConfig, saveConfig } from '../config.js';
+import { getConfig, mergePlan, saveConfig } from '../config.js';
 import { httpError } from '../errors.js';
 import { buildAgent, getProxyUrl, maskProxyUrl, parseProxyUrl, setProxy } from '../proxy.js';
 import { isWindowsPath } from '../paths.js';
@@ -113,7 +113,69 @@ function parseSettings(body, { requireLanguage }) {
   }
   const proxy = resolveIncomingProxy(body.proxyUrl);
   if (proxy !== undefined) patch.proxyUrl = proxy;
+  if (body.plan !== undefined) patch.plan = parsePlan(body.plan);
   return patch;
+}
+
+const PLAN_INTS = {
+  popularMinPlays: [0, 1e12],
+  welcomeGiftEveryDays: [1, 365],
+  streakDays: [0, 365],
+  streakBonus: [0, 10000],
+  sharePoints: [0, 10000],
+  shareMaxPerDay: [0, 100],
+  shareJoinBonus: [0, 10000],
+  episodesPerUnlock: [1, 100],
+  platformUnlockHours: [1, 720],
+};
+const PRICE_KEYS = ['series', 'seriesMyList', 'platform', 'episodes'];
+const DAILY_KINDS = new Set(['points', 'episodes', 'series']);
+
+function intIn(value, [min, max], name) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min || n > max) throw httpError(400, `plan.${name} must be a whole number ${min}-${max}`);
+  return n;
+}
+
+// Partial update of the free plan: only the keys sent change.
+function parsePlan(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw httpError(400, 'plan must be an object');
+  const current = getConfig().plan;
+  const next = { ...current, prices: { ...current.prices } };
+  if (input.vipPlatforms !== undefined) {
+    const known = new Set((getConfig().sources || []).map((s) => s.id));
+    if (!Array.isArray(input.vipPlatforms) || input.vipPlatforms.some((id) => !known.has(id))) {
+      throw httpError(400, 'plan.vipPlatforms must list known platform ids');
+    }
+    next.vipPlatforms = [...new Set(input.vipPlatforms)];
+  }
+  if (input.popularShare !== undefined) {
+    const n = Number(input.popularShare);
+    if (!Number.isFinite(n) || n < 0 || n > 1) throw httpError(400, 'plan.popularShare must be 0-1');
+    next.popularShare = n;
+  }
+  for (const [key, range] of Object.entries(PLAN_INTS)) {
+    if (input[key] !== undefined) next[key] = intIn(input[key], range, key);
+  }
+  if (input.prices !== undefined) {
+    if (!input.prices || typeof input.prices !== 'object') throw httpError(400, 'plan.prices must be an object');
+    for (const key of PRICE_KEYS) {
+      if (input.prices[key] !== undefined) next.prices[key] = intIn(input.prices[key], [0, 100000], `prices.${key}`);
+    }
+  }
+  if (input.dailyRewards !== undefined) {
+    const list = input.dailyRewards;
+    if (!Array.isArray(list) || !list.length || list.some((r) => !DAILY_KINDS.has(r?.kind))) {
+      throw httpError(400, 'plan.dailyRewards must list points, episodes or series rewards');
+    }
+    next.dailyRewards = list.map((r) => ({
+      kind: r.kind,
+      value: intIn(r.value, [1, 1000], 'dailyRewards.value'),
+      weight: intIn(r.weight, [0, 1000], 'dailyRewards.weight'),
+    }));
+    if (!next.dailyRewards.some((r) => r.weight > 0)) throw httpError(400, 'At least one daily reward needs a weight above 0');
+  }
+  return mergePlan(next);
 }
 
 function publicConfig(ctx) {

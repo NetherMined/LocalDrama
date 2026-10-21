@@ -71,13 +71,15 @@ export function createAccounts(db, { events }) {
     enabledAdmins: raw.prepare("SELECT COUNT(*) AS n FROM accounts WHERE role = 'admin' AND disabled = 0"),
     anyPassword: raw.prepare("SELECT COUNT(*) AS n FROM accounts WHERE passwordHash IS NOT NULL AND passwordHash <> ''"),
     insertAccount: raw.prepare(`
-      INSERT INTO accounts (username, passwordHash, role, mustChangePassword, disabled, createdAt, createdBy)
-      VALUES (?, ?, ?, ?, 0, ?, ?)
+      INSERT INTO accounts (username, passwordHash, role, mustChangePassword, disabled, createdAt, createdBy, tier, vipUntil)
+      VALUES (?, ?, ?, ?, 0, ?, ?, 'free', NULL)
     `),
     setPassword: raw.prepare('UPDATE accounts SET passwordHash = ?, mustChangePassword = ? WHERE id = ?'),
     setRole: raw.prepare('UPDATE accounts SET role = ? WHERE id = ?'),
     setDisabled: raw.prepare('UPDATE accounts SET disabled = ? WHERE id = ?'),
     setUsername: raw.prepare('UPDATE accounts SET username = ? WHERE id = ?'),
+    setTier: raw.prepare('UPDATE accounts SET tier = ? WHERE id = ?'),
+    setVipUntil: raw.prepare('UPDATE accounts SET vipUntil = ? WHERE id = ?'),
     setLastLogin: raw.prepare('UPDATE accounts SET lastLoginAt = ? WHERE id = ?'),
     deleteAccount: raw.prepare('DELETE FROM accounts WHERE id = ?'),
     profileCount: raw.prepare('SELECT COUNT(*) AS n FROM profiles'),
@@ -282,6 +284,21 @@ export function createAccounts(db, { events }) {
         assertKeepsAnEnabledAdmin(target);
       }
       stmts.setRole.run(next, id);
+      return toAccount(row(id));
+    },
+
+    setTier(id, tier) {
+      const target = row(id);
+      if (tier !== 'free' && tier !== 'vip') throw httpError(400, 'tier must be free or vip');
+      if (target.tier === tier) return toAccount(target);
+      stmts.setTier.run(tier, id);
+      return toAccount(row(id));
+    },
+
+    // null means VIP never expires. Callers pass a validated ISO string.
+    setVipUntil(id, vipUntil) {
+      row(id);
+      stmts.setVipUntil.run(vipUntil, id);
       return toAccount(row(id));
     },
 

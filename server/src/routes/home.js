@@ -61,7 +61,7 @@ function slugify(key) {
 }
 
 export function registerHomeRoutes(app, ctx) {
-  const { db, provider } = ctx;
+  const { db, provider, entitlements } = ctx;
   let cache = null;
   const sourceCache = new Map();
 
@@ -166,6 +166,16 @@ export function registerHomeRoutes(app, ctx) {
     };
   }
 
+  // The cached payload is shared by every account, so access is added per request.
+  function withAccess(value, account) {
+    const viewer = entitlements.viewer(account);
+    return {
+      ...value,
+      hero: value.hero ? { ...value.hero, access: viewer.showAccess(value.hero) } : null,
+      rows: value.rows.map((row) => ({ ...row, items: viewer.annotate(row.items) })),
+    };
+  }
+
   app.get('/api/home', async (req) => {
     const refresh = req.query.refresh === '1';
     const cfg = getConfig();
@@ -176,10 +186,10 @@ export function registerHomeRoutes(app, ctx) {
       ...(cfg.sources || []).filter((s) => s.enabled && !isKeyOnly(s)).map((s) => s.id),
     ].join('|');
     if (!refresh && cache && cache.signature === signature && Date.now() - cache.at < CACHE_TTL_MS) {
-      return cache.value;
+      return withAccess(cache.value, req.account);
     }
     const value = await build(refresh);
     cache = { at: Date.now(), value, signature };
-    return value;
+    return withAccess(value, req.account);
   });
 }

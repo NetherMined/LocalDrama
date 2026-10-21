@@ -45,7 +45,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   disabled INTEGER NOT NULL DEFAULT 0,
   createdAt TEXT NOT NULL,
   createdBy INTEGER,
-  lastLoginAt TEXT
+  lastLoginAt TEXT,
+  tier TEXT NOT NULL DEFAULT 'free',
+  vipUntil TEXT
 );
 CREATE TABLE IF NOT EXISTS devices (
   id TEXT NOT NULL,
@@ -78,8 +80,11 @@ CREATE TABLE IF NOT EXISTS profiles (
   color TEXT NOT NULL,
   pinHash TEXT,
   isAdmin INTEGER NOT NULL DEFAULT 0,
-  createdAt TEXT NOT NULL
+  createdAt TEXT NOT NULL,
+  accountId INTEGER
 );
+CREATE INDEX IF NOT EXISTS profiles_account ON profiles(accountId);
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_account_name ON profiles(accountId, name);
 CREATE TABLE IF NOT EXISTS profile_sessions (
   token TEXT PRIMARY KEY,
   profileId INTEGER NOT NULL,
@@ -138,12 +143,61 @@ CREATE TABLE IF NOT EXISTS follows (
   checkedAt TEXT,
   PRIMARY KEY (accountId, bookId)
 );
+CREATE TABLE IF NOT EXISTS unlocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  accountId INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  ref TEXT NOT NULL,
+  fromEp INTEGER,
+  toEp INTEGER,
+  expiresAt TEXT,
+  reason TEXT,
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS unlocks_account ON unlocks(accountId);
+CREATE INDEX IF NOT EXISTS unlocks_ref ON unlocks(kind, ref);
+
+CREATE TABLE IF NOT EXISTS points_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  accountId INTEGER NOT NULL,
+  delta INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  ref TEXT,
+  day TEXT NOT NULL,
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS points_ledger_account ON points_ledger(accountId, reason, day);
+CREATE TABLE IF NOT EXISTS daily_rewards (
+  accountId INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value INTEGER NOT NULL,
+  ref TEXT,
+  streak INTEGER NOT NULL DEFAULT 1,
+  claimedAt TEXT NOT NULL,
+  PRIMARY KEY (accountId, day)
+);
+CREATE TABLE IF NOT EXISTS share_links (
+  code TEXT PRIMARY KEY,
+  accountId INTEGER NOT NULL,
+  bookId TEXT NOT NULL,
+  sourceId TEXT,
+  createdAt TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS share_links_owner ON share_links(accountId, bookId);
+CREATE TABLE IF NOT EXISTS share_opens (
+  code TEXT NOT NULL,
+  accountId INTEGER NOT NULL,
+  createdAt TEXT NOT NULL,
+  PRIMARY KEY (code, accountId)
+);
 `;
 
 const ADDED_COLUMNS = {
-  // Free accounts are limited to non-premium sources (see tiers.js); admins and VIP see everything.
+  // Free accounts can't watch VIP content without an unlock (see entitlements.js); admins and VIP watch everything.
   accounts: {
     tier: "TEXT NOT NULL DEFAULT 'free'",
+    vipUntil: 'TEXT',
   },
   sessions: {
     accountId: 'INTEGER',
@@ -169,13 +223,29 @@ const ADDED_COLUMNS = {
   },
 };
 
+// An unfinished build created the rewards tables with a different shape. They only held test
+// rows, so any table missing a current column is dropped and recreated by SCHEMA.
+const REWARD_TABLE_MARKERS = { points_ledger: 'day', daily_rewards: 'streak', share_links: 'sourceId' };
+
+function dropDraftRewardTables(raw) {
+  for (const [table, column] of Object.entries(REWARD_TABLE_MARKERS)) {
+    const columns = raw.prepare(`PRAGMA table_info(${table})`).all();
+    if (columns.length && !columns.some((c) => c.name === column)) raw.exec(`DROP TABLE ${table}`);
+  }
+}
+
+// Returns the "table.column" names it added, so one-time data migrations can key off them.
 function ensureColumns(raw) {
+  const added = new Set();
   for (const [table, columns] of Object.entries(ADDED_COLUMNS)) {
     const existing = new Set(raw.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
     for (const [name, definition] of Object.entries(columns)) {
-      if (!existing.has(name)) raw.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      if (existing.has(name)) continue;
+      raw.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      added.add(`${table}.${name}`);
     }
   }
+  return added;
 }
 
 // Profile names were globally unique; they are now unique per account. SQLite cannot drop a
@@ -325,10 +395,13 @@ export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
   const raw = new Database(path.join(dataDir, 'library.db'));
   raw.pragma('journal_mode = WAL');
+  dropDraftRewardTables(raw);
   raw.exec(SCHEMA);
-  ensureColumns(raw);
+  const added = ensureColumns(raw);
   dropGlobalProfileNameUnique(raw);
   migrateAccounts(raw, legacyPasswordHash);
+  // Accounts that existed before free/VIP tiers keep full access; new accounts start free.
+  if (added.has('accounts.vipUntil')) raw.prepare("UPDATE accounts SET tier = 'vip'").run();
   const ftsReady = setupSearchIndex(raw);
 
   const upsert = raw.prepare(UPSERT_SHOW);

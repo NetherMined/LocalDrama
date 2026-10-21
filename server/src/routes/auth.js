@@ -9,6 +9,7 @@ import {
   verifyPassword,
 } from '../auth.js';
 import { clearProfileCookie } from '../profiles.js';
+import { clearShareCookie, readShareCode } from './rewards.js';
 
 const IP_WINDOW_MS = 60 * 1000;
 const IP_MAX_ATTEMPTS = 5;
@@ -29,7 +30,7 @@ export function limiter(windowMs, max) {
 }
 
 export function registerAuthRoutes(app, ctx) {
-  const { auth, accounts, profiles } = ctx;
+  const { auth, accounts, profiles, rewards } = ctx;
   const overIpLimit = limiter(IP_WINDOW_MS, IP_MAX_ATTEMPTS);
   const overUserLimit = limiter(USER_WINDOW_MS, USER_MAX_ATTEMPTS);
   // Checked against when the account can't sign in, so the response time doesn't reveal
@@ -65,7 +66,14 @@ export function registerAuthRoutes(app, ctx) {
     const matches = await verifyPassword(password, usable ? account.passwordHash : await dummyHash);
     const ok = usable && matches;
     if (!ok) throw httpError(401, 'Invalid username or password');
-    return signIn(req, reply, account.id);
+    const result = signIn(req, reply, account.id);
+    const shareCode = readShareCode(req);
+    if (shareCode) {
+      rewards.openShare(shareCode, result.account);
+      reply.header('Set-Cookie', [...reply.getHeader('Set-Cookie'), clearShareCookie()]);
+    }
+    rewards.grantDueGifts(result.account);
+    return result;
   });
 
   app.post('/api/auth/logout', async (req, reply) => {

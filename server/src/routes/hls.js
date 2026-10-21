@@ -9,26 +9,30 @@ function isPrivateHost(hostname) {
   return PRIVATE_HOSTS.test(String(hostname || '')) || /\.local$/i.test(hostname || '');
 }
 
-function proxyUrl(raw, base) {
+export function hlsProxyUrl(absolute, token) {
+  return `/api/hls?url=${encodeURIComponent(absolute)}&t=${encodeURIComponent(token)}`;
+}
+
+function proxyUrl(raw, base, token) {
   let absolute;
   try {
     absolute = new URL(raw, base).toString();
   } catch {
     return raw;
   }
-  return `/api/hls?url=${encodeURIComponent(absolute)}`;
+  return hlsProxyUrl(absolute, token);
 }
 
-function rewritePlaylist(text, base) {
+function rewritePlaylist(text, base, token) {
   return text
     .split(/\r?\n/)
     .map((line) => {
       const trimmed = line.trim();
       if (!trimmed) return line;
       if (trimmed.startsWith('#')) {
-        return line.replace(/URI="([^"]+)"/g, (_match, uri) => `URI="${proxyUrl(uri, base)}"`);
+        return line.replace(/URI="([^"]+)"/g, (_match, uri) => `URI="${proxyUrl(uri, base, token)}"`);
       }
-      return proxyUrl(trimmed, base);
+      return proxyUrl(trimmed, base, token);
     })
     .join('\n');
 }
@@ -41,8 +45,12 @@ function looksLikePlaylist(url, contentType) {
   );
 }
 
-export function registerHlsRoutes(app) {
+export function registerHlsRoutes(app, ctx) {
+  const { entitlements } = ctx;
   app.get('/api/hls', async (req, reply) => {
+    const token = String(req.query?.t || '');
+    if (!entitlements.checkStreamToken(token, req.account?.id)) throw httpError(403, 'stream_token_invalid');
+
     const raw = String(req.query?.url || '');
     if (!raw) throw httpError(400, 'url is required');
 
@@ -88,7 +96,7 @@ export function registerHlsRoutes(app) {
       reply.header('Content-Type', 'application/vnd.apple.mpegurl');
       reply.header('Cache-Control', 'no-store');
       reply.header('Access-Control-Allow-Origin', '*');
-      return reply.send(rewritePlaylist(text, upstream.url));
+      return reply.send(rewritePlaylist(text, upstream.url, token));
     }
 
     reply.code(upstream.status === 206 ? 206 : 200);

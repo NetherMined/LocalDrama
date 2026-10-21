@@ -630,6 +630,39 @@ Each phase stops for confirmation before the next.
 Points ledger, daily reward claim + streak, welcome gift, share tracking (`/s/<code>` short links that credit
 the sharer when opened by another signed-in account), shop purchases, notifications for rewards.
 
+### Phase 3 review (2026-10-21) and what was fixed
+- `canWatch` treated "VIP account" and "locked" as the same `vip` value, so **admins and VIP accounts got 403
+  on every VIP stream** (this was live in the container). Access is now `free` / `vip` (locked) / `unlocked`.
+- `toAccount` dropped `vipUntil`, so expiry never applied. Fixed.
+- `tiers.js` hard-coded 22 platforms as premium and used `require` in ESM; `plan.vipPlatforms` was never read.
+  Removed; the plan (6 VIP platforms by default) drives everything.
+- Popularity was an absolute 50 000-play cut-off (most of VibeShort/GoodShort). Now top `popularShare` (20 %) per
+  platform from the shows cache, recomputed daily, platforms with < 10 ranked series exempt; absolute rule off by default.
+- Series/platform unlocks were checked after the VIP short-circuit, so they never applied; platform unlocks
+  were never checked. Fixed.
+- Stream gate let uncached shows through, and the 403 lost its unlock options (`httpError` took 2 args).
+- HLS gate guessed the platform from the hostname (`goodbos` → dramabox). Replaced by a signed per-account
+  stream token (`&t=`) that `/api/hls` requires and copies onto rewritten child URLs.
+- VIP migration matched four usernames on every start (it would re-promote a demoted user). It now runs once,
+  when the `accounts.vipUntil` column is first added.
+- Admins can edit the plan: `PUT /api/settings { plan: {...partial} }`, validated.
+
+### Phase 4 API (implemented)
+- `GET /api/rewards` → `{ vip, balance, streak, daily: { claimed, reward }, shares: { today, max }, gifts, unlocks[], history[], rules }`
+  (also grants any due welcome/activity gift).
+- `POST /api/rewards/daily` → `{ reward: { kind: points|episodes|series, ... }, streak, bonus, balance }`; 409 `already_claimed`.
+  Episodes = next 5 locked after the last watched episode of a series being watched; series = random locked series
+  from My List, else any; no candidate (or VIP) → points. Day-7 streak bonus +10.
+- Welcome gift: one random locked full series on first sign-in/visit, one more every 7 claimed days. Free accounts only.
+- `POST /api/rewards/share { bookId, source? }` → `{ code, path: '/s/<code>' }` (one code per account+series);
+  `POST /api/rewards/share/complete { code }` → +10 pts, max 3 a day.
+- `GET /s/<code>` (public) → redirect to the series. A signed-in visitor (or one who signs in later, via the
+  `dbx_share` cookie) credits the sharer +25 once per visitor; never for your own link.
+- `POST /api/rewards/shop { kind: series|episodes|platform, bookId?, source?, fromEp? }` → `{ cost, unlock, balance }`;
+  400 `not_enough_points` (with balance/cost), not locked, or not a VIP platform. Atomic.
+- Locked stream: 403 `{ error: 'vip_required', reason: platform|popular, bookId, source, episode, options[] }`.
+- Notifications for daily rewards, gifts and shares that pay off.
+
 ## Phase 5: Free experience (web)
 VIP badges/locks on cards and episode tiles, locked-episode screen in the player with unlock options
 (points / reward / ask admin), a Rewards page (balance, daily claim, streak, history, shop), points in the
