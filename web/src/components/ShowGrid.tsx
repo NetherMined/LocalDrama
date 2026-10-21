@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Page, Show } from '../api'
 import { errorMessage } from '../lib/format'
-import { ShowCard } from './ShowCard'
+import { ShowCard, showGridClass } from './ShowCard'
 import { EmptyState, LoadError, buttonClass } from './ui'
 
 interface Props {
@@ -109,7 +109,7 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint, emptyAction }:
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className={showGridClass}>
         {items.map((show) => (
           <ShowCard key={show.bookId} show={show} />
         ))}
@@ -155,10 +155,10 @@ export function ShowGrid({ resetKey, load, emptyTitle, emptyHint, emptyAction }:
 
 export function ShowGridSkeleton({ count = 10 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-busy="true" aria-label="Loading">
+    <div className={showGridClass} aria-busy="true" aria-label="Loading">
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="animate-pulse">
-          <div className="aspect-video rounded-md bg-panel-2" />
+          <div className="aspect-[2/3] rounded-md bg-panel-2" />
           <div className="mt-2 h-3 w-3/4 rounded bg-panel-2" />
         </div>
       ))}

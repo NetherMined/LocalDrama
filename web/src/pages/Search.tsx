@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, type SearchError, type SearchPlatform, type Show } from '../api'
-import { ShowCard } from '../components/ShowCard'
+import { ShowCard, showGridClass } from '../components/ShowCard'
 import { ShowGrid } from '../components/ShowGrid'
+import { PlatformLogo } from '../components/PlatformLogo'
 import { EmptyState, PageHeader, buttonClass } from '../components/ui'
 
 function chipClass(active: boolean) {
@@ -111,6 +112,7 @@ export function Search() {
               className={chipClass(source === platform.id)}
               aria-current={source === platform.id ? 'true' : undefined}
             >
+              <PlatformLogo id={platform.id} name={platform.name} size={16} decorative className="mr-2" />
               {platform.name} {platform.count}
             </Link>
           ))}
@@ -125,7 +127,7 @@ export function Search() {
             <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
             Top matches · searching all platforms…
           </p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className={showGridClass}>
             {quick.items.map((show) => (
               <ShowCard key={`${show.source ?? ''}:${show.bookId}`} show={show} />
             ))}

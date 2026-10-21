@@ -6,6 +6,7 @@ import { useStatus } from '../status'
 import { PlayerShell, type PlayerEpisode, type PlayerHandle, type PlayerSample, type ResolvedSource } from '../components/PlayerShell'
 import { StatusPill } from '../components/StatusPill'
 import { CheckIcon, PlayIcon } from '../components/icons'
+import { PlatformLogo } from '../components/PlatformLogo'
 import { Poster, LoadError, buttonClass } from '../components/ui'
 import { errorMessage, fmtEpisode, fmtMinutesLeft, isGenericEpisodeName } from '../lib/format'
 
@@ -275,10 +276,10 @@ export function Show() {
   const meta = [
     ...(show?.tags ?? []).slice(0, 4),
     `${episodes.length || show?.episodeCount || 0} episodes`,
-    show?.sourceName,
   ]
     .filter(Boolean)
     .join(' · ')
+  const platformId = show?.source ?? source ?? null
 
   return (
     <div className="space-y-8">
@@ -315,7 +316,18 @@ export function Show() {
             <h1 className="text-3xl leading-tight font-black tracking-tight break-words sm:text-4xl md:text-5xl">
               {title}
             </h1>
-            {meta && <p className="text-sm font-medium text-muted">{meta}</p>}
+            {(meta || show?.sourceName) && (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-muted">
+                {meta}
+                {show?.sourceName && (
+                  <span className="inline-flex items-center gap-1.5">
+                    {meta && <span aria-hidden="true">·</span>}
+                    <PlatformLogo id={platformId} name={show.sourceName} size={16} decorative />
+                    {show.sourceName}
+                  </span>
+                )}
+              </p>
+            )}
             {!show && (
               <p className="text-sm text-amber-300">Details are not cached for this drama. Episodes are shown below.</p>
             )}

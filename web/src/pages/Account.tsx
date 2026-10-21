@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api, type Device, type Show } from '../api'
-import { ShowCard } from '../components/ShowCard'
+import { ShowCard, showGridClass } from '../components/ShowCard'
 import { EmptyState, NoticeText, Section, buttonClass, inputClass, type Notice } from '../components/ui'
 import { errorMessage, fmtAgo } from '../lib/format'
 import { useStatus } from '../status'
@@ -188,7 +188,7 @@ function FavouritesCard({ profileName }: { profileName: string | null }) {
       )}
 
       {items !== null && items.length > 0 && (
-        <ul className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
+        <ul className={`${showGridClass} list-none`}>
           {items.map((show) => (
             <li key={show.bookId} className="relative">
               <ShowCard show={show} />

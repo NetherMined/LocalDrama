@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, useEvents, type LibraryShow } from '../api'
+import { showGridClass } from '../components/ShowCard'
 import { EmptyState, GridSkeleton, LoadError, PageHeader, Poster, buttonClass } from '../components/ui'
 import { errorMessage } from '../lib/format'
 import { useStatus } from '../status'
@@ -76,7 +77,7 @@ export function Library() {
         </EmptyState>
       )}
       {shows && shows.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <div className={showGridClass}>
           {shows.map((show) => (
             <Link
               key={show.bookId}
@@ -84,7 +85,7 @@ export function Library() {
               className="group/card block rounded-md outline-none"
             >
               <div className="overflow-hidden rounded-md transition duration-200 group-hover/card:scale-[1.03] group-hover/card:shadow-xl group-hover/card:shadow-black/60 group-focus-visible/card:ring-2 group-focus-visible/card:ring-accent-hi">
-                <Poster src={show.cover} name={show.name} />
+                <Poster src={show.cover} name={show.name} aspect="card" />
               </div>
               <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-white/90 group-hover/card:text-white">
                 {show.name}

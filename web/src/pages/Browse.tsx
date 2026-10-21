@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, type BrowseCategory, type BrowseSort, type BrowseSources } from '../api'
+import { PlatformLogo } from '../components/PlatformLogo'
 import { ShowGrid, ShowGridSkeleton } from '../components/ShowGrid'
 import { buttonClass } from '../components/ui'
 import { errorMessage } from '../lib/format'
@@ -109,17 +110,20 @@ export function Browse() {
 
       <div className="sticky top-[92px] z-30 -mx-4 mb-6 bg-black/90 px-4 pt-3 pb-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-col gap-3 sm:flex-row">
-          <label className="block w-full sm:w-56">
-            <span className="sr-only">Platform</span>
-            <select value={source} onChange={(e) => choosePlatform(e.target.value)} disabled={!sources} className={selectClass}>
-              {!sources && <option value="">Loading platforms</option>}
-              {sources?.sources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex w-full items-center gap-3 sm:w-56">
+            {source && <PlatformLogo id={source} name={platformName} size={24} decorative />}
+            <label className="block min-w-0 flex-1">
+              <span className="sr-only">Platform</span>
+              <select value={source} onChange={(e) => choosePlatform(e.target.value)} disabled={!sources} className={selectClass}>
+                {!sources && <option value="">Loading platforms</option>}
+                {sources?.sources.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <label className="block w-full sm:w-56">
             <span className="sr-only">Sort by</span>
             <select value={sort} onChange={(e) => chooseSort(e.target.value as BrowseSort)} className={selectClass}>

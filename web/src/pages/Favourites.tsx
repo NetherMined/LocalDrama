@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type Show } from '../api'
-import { ShowCard } from '../components/ShowCard'
+import { ShowCard, showGridClass } from '../components/ShowCard'
 import { LoadError, PageHeader } from '../components/ui'
 import { errorMessage } from '../lib/format'
 
@@ -39,7 +39,7 @@ export function Favourites() {
           You have not favourited any shows yet.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className={showGridClass}>
           {items.map((show) => (
             <ShowCard key={show.bookId} show={show} />
           ))}

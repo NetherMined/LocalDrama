@@ -10,7 +10,7 @@ import {
   type Show,
 } from '../api'
 import { ChevronLeftIcon } from '../components/icons'
-import { ShowCard, showPath } from '../components/ShowCard'
+import { ShowCard, showGridClass, showPath } from '../components/ShowCard'
 import { Toast, useToast } from '../components/Toast'
 import { UserActions } from '../components/UserActions'
 import { RoleBadge, StatusBadges, UserInitial } from '../components/UserBadges'
@@ -255,7 +255,7 @@ export function AdminUserDetail() {
                 {profile.currentlyWatching.length === 0 ? (
                   <p className="text-sm text-muted">Nothing in progress in the last 14 days.</p>
                 ) : (
-                  <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <ul className={`${showGridClass} list-none`}>
                     {profile.currentlyWatching.map((c) => (
                       <li key={`${c.kind}-${c.show.bookId}-${c.episodeIndex}`}>
                         <ShowCard
@@ -304,7 +304,7 @@ export function AdminUserDetail() {
                 {profile.favourites.length === 0 ? (
                   <p className="text-sm text-muted">No favourites yet.</p>
                 ) : (
-                  <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                  <ul className={`${showGridClass} list-none`}>
                     {profile.favourites.map((f) => {
                       const show = toCardShow(f)
                       return (

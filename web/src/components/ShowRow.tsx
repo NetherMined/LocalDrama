@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
+import { PlatformLogo } from './PlatformLogo'
+
+const itemClass = 'w-[140px] shrink-0 snap-start sm:w-[160px] lg:w-[180px]'
 
 const arrowClass =
   'absolute inset-y-0 z-10 hidden w-12 items-center justify-center text-white opacity-0 transition duration-200 group-hover/row:opacity-100 focus-visible:opacity-100 md:flex'
@@ -12,6 +16,8 @@ export function ShowRow<T>({
   itemKey,
   render,
   action,
+  logo,
+  viewAllHref,
 }: {
   id?: string
   title: string
@@ -19,6 +25,9 @@ export function ShowRow<T>({
   itemKey: (item: T) => string
   render: (item: T) => ReactNode
   action?: ReactNode
+  /** Platform id; shows that platform's logo before the title. */
+  logo?: string
+  viewAllHref?: string
 }) {
   const headingId = useId()
   const scroller = useRef<HTMLUListElement>(null)
@@ -47,10 +56,25 @@ export function ShowRow<T>({
   return (
     <section id={id} aria-labelledby={headingId} className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <h2 id={headingId} className="text-lg font-bold tracking-tight text-white sm:text-xl">
-          {title}
-        </h2>
-        {action}
+        <div className="flex min-w-0 items-center gap-2.5">
+          {logo && <PlatformLogo id={logo} size={24} decorative />}
+          <h2 id={headingId} className="truncate text-lg font-bold tracking-tight text-white sm:text-xl">
+            {title}
+          </h2>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {action}
+          {viewAllHref && (
+            <Link
+              to={viewAllHref}
+              aria-label={`View all ${title}`}
+              className="inline-flex min-h-11 items-center gap-0.5 rounded-md px-2 text-sm text-muted transition hover:text-white focus-visible:ring-2 focus-visible:ring-accent-hi sm:min-h-0 sm:px-0"
+            >
+              View all
+              <ChevronRightIcon className="h-4 w-4" />
+            </Link>
+          )}
+        </div>
       </div>
       <div className="group/row relative">
         <ul
@@ -59,7 +83,7 @@ export function ShowRow<T>({
           className="no-scrollbar flex snap-x snap-mandatory list-none gap-3 overflow-x-auto scroll-smooth py-1"
         >
           {items.map((item) => (
-            <li key={itemKey(item)} className="w-[260px] shrink-0 snap-start sm:w-[280px]">
+            <li key={itemKey(item)} className={itemClass}>
               {render(item)}
             </li>
           ))}
@@ -95,8 +119,8 @@ export function ShowRowSkeleton({ title }: { title: string }) {
       <div className="h-6 w-40 animate-pulse rounded bg-panel-2" />
       <ul className="flex list-none gap-3 overflow-hidden py-1">
         {Array.from({ length: 5 }, (_, i) => (
-          <li key={i} className="w-[260px] shrink-0 animate-pulse sm:w-[280px]">
-            <div className="aspect-video rounded-md bg-panel-2" />
+          <li key={i} className={`${itemClass} animate-pulse`}>
+            <div className="aspect-[2/3] rounded-md bg-panel-2" />
             <div className="mt-2 h-3 w-3/4 rounded bg-panel-2" />
           </li>
         ))}

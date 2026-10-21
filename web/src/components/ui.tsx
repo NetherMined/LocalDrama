@@ -18,10 +18,10 @@ export function Poster({
   src?: string
   name: string
   className?: string
-  aspect?: 'portrait' | 'landscape'
+  aspect?: 'card' | 'portrait' | 'landscape'
 }) {
   const [failed, setFailed] = useState(false)
-  const ratio = aspect === 'landscape' ? 'aspect-video' : 'aspect-[3/4]'
+  const ratio = aspect === 'landscape' ? 'aspect-video' : aspect === 'card' ? 'aspect-[2/3]' : 'aspect-[3/4]'
   if (!src || failed) {
     return (
       <div
@@ -39,7 +39,7 @@ export function Poster({
       alt={name}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={`${ratio} w-full bg-panel-2 object-cover ${aspect === 'landscape' ? 'object-top' : ''} ${className}`}
+      className={`${ratio} w-full bg-panel-2 object-cover ${aspect === 'landscape' ? 'object-top' : 'object-center'} ${className}`}
     />
   )
 }
@@ -77,10 +77,10 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
 
 export function GridSkeleton({ count = 12 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" aria-busy="true" aria-label="Loading">
+    <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" aria-busy="true" aria-label="Loading">
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="animate-pulse">
-          <div className="aspect-[3/4] rounded-md bg-panel-2" />
+          <div className="aspect-[2/3] rounded-md bg-panel-2" />
           <div className="mt-2 h-3 w-3/4 rounded bg-panel-2" />
         </div>
       ))}

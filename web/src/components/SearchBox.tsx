@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, type SearchCategory, type Suggestion } from '../api'
+import { PlatformLogo } from './PlatformLogo'
 import { showPath } from './ShowCard'
 import { SearchIcon } from './icons'
 
@@ -219,15 +220,16 @@ export function SearchBox() {
               return (
                 <li key={`${show.source ?? ''}:${show.bookId}`} {...common}>
                   {show.cover ? (
-                    <img src={show.cover} alt="" loading="lazy" className="aspect-video w-20 shrink-0 rounded object-cover" />
+                    <img src={show.cover} alt="" loading="lazy" className="aspect-[2/3] w-11 shrink-0 rounded bg-panel-2 object-cover" />
                   ) : (
-                    <span className="aspect-video w-20 shrink-0 rounded bg-panel-2" aria-hidden="true" />
+                    <span className="aspect-[2/3] w-11 shrink-0 rounded bg-panel-2" aria-hidden="true" />
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="line-clamp-1 block text-white/85">{highlight(show.name, q)}</span>
                     <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted">
                       {show.sourceName && (
-                        <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-rose-500 uppercase">
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-white/80">
+                          <PlatformLogo id={show.source} name={show.sourceName} size={16} decorative />
                           {show.sourceName}
                         </span>
                       )}

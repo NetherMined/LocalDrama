@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ContinueItem, type HomeData, type Show, type StreamContinueItem } from '../api'
+import { api, type ContinueItem, type HomeData, type HomeRow, type Show, type StreamContinueItem } from '../api'
 import { Hero } from '../components/Hero'
 import { ShowCard } from '../components/ShowCard'
 import { ShowRow, ShowRowSkeleton } from '../components/ShowRow'
 import { RefreshIcon } from '../components/icons'
 import { LoadError, buttonClass } from '../components/ui'
 import { errorMessage, fmtEpisode, fmtMinutesLeft } from '../lib/format'
+import { useStatus } from '../status'
 
 const SKELETON_ROWS = ['Currently Watching', 'Latest', 'Trending Now']
 const CONTINUE_ID = 'continue-watching'
@@ -67,6 +68,9 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [continueItems, setContinueItems] = useState<ContinueEntry[]>([])
+  const [hasDownloads, setHasDownloads] = useState(false)
+  const { status } = useStatus()
+  const isAdmin = status?.account?.role === 'admin'
 
   const load = useCallback(async (refresh: boolean) => {
     setRefreshing(true)
@@ -88,6 +92,7 @@ export function Home() {
     let cancelled = false
     Promise.allSettled([api.continueWatching(), api.watchContinue()]).then(([downloads, streams]) => {
       if (cancelled) return
+      setHasDownloads(downloads.status === 'fulfilled' && downloads.value.items.length > 0)
       setContinueItems(
         mergeContinue(
           streams.status === 'fulfilled' ? streams.value.items : [],
@@ -158,6 +163,7 @@ export function Home() {
             itemKey={(item) => item.show.bookId}
             render={(item) => <ContinueCard entry={item} />}
             action={refreshButton}
+            viewAllHref={isAdmin || hasDownloads ? '/library' : undefined}
           />
         )}
 
@@ -170,6 +176,8 @@ export function Home() {
               itemKey={(show) => show.bookId}
               render={(show) => <ShowCard show={show} />}
               action={index === 0 && !hasContinue ? refreshButton : undefined}
+              logo={row.key.startsWith('latest-') ? row.source : undefined}
+              viewAllHref={rowViewAllHref(row)}
             />
           ))
         ) : (
@@ -199,6 +207,14 @@ export function Home() {
       </div>
     </div>
   )
+}
+
+function rowViewAllHref(row: HomeRow): string | undefined {
+  if (row.key.startsWith('latest-') && row.source) return `/browse?source=${encodeURIComponent(row.source)}`
+  if (row.key === 'trending') return '/browse?sort=latest'
+  if (row.key === 'new-popular') return '/browse?sort=popular'
+  if (row.key.startsWith('genre-')) return `/browse?tag=${encodeURIComponent(row.title)}`
+  return undefined
 }
 
 function ContinueCard({ entry }: { entry: ContinueEntry }) {
