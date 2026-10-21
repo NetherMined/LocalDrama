@@ -31,6 +31,12 @@ const LANGUAGE_CODES = new Set(LANGUAGES.map((l) => l.code));
 const QUALITIES = new Set([144, 360, 540, 720, 1080]);
 
 export function lanUrls(port) {
+  // Inside Docker the interfaces belong to the container (for example 172.26.0.2),
+  // so they are not reachable from other devices. PUBLIC_URL is the address the
+  // host is actually reachable on, and is what the install QR code uses.
+  const publicUrl = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (publicUrl) return [publicUrl];
+
   const urls = [];
   for (const infos of Object.values(os.networkInterfaces())) {
     for (const info of infos || []) {
