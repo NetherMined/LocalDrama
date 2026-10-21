@@ -1,1 +1,1 @@
-PLACEHOLDER_FULL
+PLACEHOLDER - will replace with full content in next call if needed
