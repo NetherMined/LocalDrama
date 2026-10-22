@@ -26,7 +26,7 @@ export function InstallBanner() {
   const [dismissed, setDismissed] = useState(wasDismissed)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  if (installed || dismissed || platform === 'tv' || platform === 'android') {
+  if (installed || dismissed || platform === 'tv') {
     return dialogOpen ? <InstallDialog onClose={() => setDialogOpen(false)} /> : null
   }
 
@@ -39,20 +39,22 @@ export function InstallBanner() {
     <>
       <div
         role="region"
-        aria-label="Install DramaUs"
+        aria-label="Install Dramora"
         className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 flex items-center gap-3 rounded-xl border border-white/10 bg-panel-2 p-3 shadow-2xl shadow-black/70 sm:hidden"
       >
         <img src="/icons/icon-192.png" alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-lg" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">Install DramaUs</p>
-          <p className="truncate text-xs text-muted">Open it full-screen from your home screen</p>
+          <p className="text-sm font-semibold text-white">Install Dramora</p>
+          <p className="truncate text-xs text-muted">
+            {platform === 'android' ? 'Download the Android app' : 'Open it full-screen from your home screen'}
+          </p>
         </div>
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
           className="inline-flex min-h-11 shrink-0 items-center rounded-md bg-accent px-3 text-sm font-semibold text-white"
         >
-          How
+          {platform === 'android' ? 'Install' : 'How'}
         </button>
         <button
           type="button"

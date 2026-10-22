@@ -192,6 +192,10 @@ if (hasWebDist) {
     root: WEB_DIST,
     cacheControl: false,
     setHeaders(res, filePath) {
+      if (filePath.endsWith('.apk')) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Content-Disposition', 'attachment; filename="Dramora.apk"');
+      }
       res.setHeader('Cache-Control', path.basename(filePath) === 'sw.js' ? 'no-cache' : 'public, max-age=0');
     },
   });

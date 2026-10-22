@@ -33,7 +33,7 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false)
   const [installOpen, setInstallOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const { installed, platform } = useInstall()
+  const { installed } = useInstall()
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const overHero = location.pathname === '/' && !scrolled
@@ -198,7 +198,7 @@ export function Nav() {
               <Link to="/account" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                 Account
               </Link>
-              {!installed && platform !== 'android' && (
+              {!installed && (
                 <button
                   type="button"
                   role="menuitem"

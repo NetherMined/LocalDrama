@@ -45,7 +45,8 @@ export function isInstalled(): boolean {
   if (typeof window === 'undefined') return false
   const standalone = window.matchMedia?.(STANDALONE_QUERY).matches ?? false
   const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
-  return standalone || iosStandalone
+  const androidApp = /;\s*wv\)|DramoraAndroid/i.test(navigator.userAgent)
+  return standalone || iosStandalone || androidApp
 }
 
 export interface InstallState {

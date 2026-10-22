@@ -4,7 +4,7 @@ import { useInstall } from '../install'
 import { useStatus } from '../status'
 import { buttonClass } from './ui'
 import { Modal } from './Modal'
-import { AddSquareIcon, MoreVerticalIcon, ShareIcon } from './icons'
+import { AddSquareIcon, ShareIcon } from './icons'
 
 function Steps({ children }: { children: ReactNode }) {
   return <ol className="space-y-3 text-sm text-white/85">{children}</ol>
@@ -60,12 +60,30 @@ export function InstallDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal
-      title="Install DramaUs"
-      description={installed ? 'DramaUs is already installed on this device.' : undefined}
+      title="Install Dramora"
+      description={installed ? 'Dramora is already installed on this device.' : undefined}
       onClose={onClose}
     >
       <div className="space-y-5">
-        {!installed && canPrompt && (
+        {!installed && platform === 'android' && (
+          <div className="space-y-3">
+            <p className="text-sm text-white/85">
+              Download the Dramora app for this phone. It opens your server full screen, without the browser bar.
+            </p>
+            <a href="/dramora.apk" download="Dramora.apk" className={`${buttonClass()} w-full`}>
+              Install
+            </a>
+            <Steps>
+              <Step n={1}>Tap <strong>Install</strong>. Android downloads Dramora.apk.</Step>
+              <Step n={2}>Open the download and tap <strong>Install</strong>.</Step>
+              <Step n={3}>
+                If Android asks, allow installs from this browser. Then enter this server's address if it is not filled in.
+              </Step>
+            </Steps>
+          </div>
+        )}
+
+        {!installed && platform !== 'android' && canPrompt && (
           <div className="space-y-3">
             <p className="text-sm text-white/85">
               Install DramaUs to your device for a full-screen app with its own icon. It opens without the browser
@@ -78,7 +96,7 @@ export function InstallDialog({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!installed && !canPrompt && platform === 'ios' && (
+        {!installed && platform === 'ios' && !canPrompt && (
           <div className="space-y-3">
             <p className="text-sm text-white/85">Add DramaUs to your home screen from Safari:</p>
             <Steps>
@@ -95,24 +113,7 @@ export function InstallDialog({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!installed && !canPrompt && platform === 'android' && (
-          <div className="space-y-3">
-            <p className="text-sm text-white/85">Add DramaUs to your home screen from Chrome:</p>
-            <Steps>
-              <Step n={1} icon={<MoreVerticalIcon />}>
-                Tap the <strong>menu</strong> (⋮) in the top right.
-              </Step>
-              <Step n={2}>
-                Tap <strong>Add to Home screen</strong> (or <strong>Install app</strong>).
-              </Step>
-            </Steps>
-            <p className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200">
-              The shortcut opens DramaUs in Chrome. It works on your home Wi-Fi.
-            </p>
-          </div>
-        )}
-
-        {!installed && !canPrompt && platform === 'desktop' && (
+        {!installed && platform === 'desktop' && !canPrompt && (
           <p className="text-sm text-white/85">
             Use the install icon in your browser's address bar, or open the address below on your phone and add it to
             the home screen.

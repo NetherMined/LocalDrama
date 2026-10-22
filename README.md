@@ -406,13 +406,9 @@ Set an admin password before the server is reachable from the internet.
 
 Dramora on Android is a player. It does not run the server. Install the APK on a phone or an Android TV stick (including Skyworth), then enter the server address.
 
-1. Copy `Dramora.apk` to the device (USB, download, or a file share).
-2. Allow installs from unknown sources.
-3. Install and open Dramora.
-4. Enter the server address:
-   - Same Wi-Fi: `http://192.168.1.111:8096`
-   - From the internet: `http://YOUR_PUBLIC_IP:8096` (the same URL as `PUBLIC_URL`)
-5. The site loads full screen. **Back** on the first page offers Reload, Change server, or Stay.
+On an Android phone, open Dramora in Chrome and tap **Install** on the banner (or **Install app** in the profile menu). That downloads `Dramora.apk` from this server. Open the download, allow installs from the browser if Android asks, and install it. The app then asks for this server's address the first time.
+
+You can also copy the file yourself from `http://YOUR_SERVER:8096/dramora.apk`.
 
 The stick and the server must be able to reach that address. A browser on the same device is a good test before you blame the APK.
 
