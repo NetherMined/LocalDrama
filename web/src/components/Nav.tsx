@@ -33,7 +33,10 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false)
   const [installOpen, setInstallOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const { installed } = useInstall()
+  const { installed, platform } = useInstall()
+  // Android phones and Android TV sticks install the APK; other TVs have nothing to install.
+  const androidDevice = /Android/i.test(navigator.userAgent)
+  const showInstall = !installed && (androidDevice || platform !== 'tv')
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const overHero = location.pathname === '/' && !scrolled
@@ -198,7 +201,18 @@ export function Nav() {
               <Link to="/account" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                 Account
               </Link>
-              {!installed && (
+              {showInstall && androidDevice && (
+                <a
+                  href="/dramora.apk"
+                  download="Dramora.apk"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className={menuItemClass}
+                >
+                  Install app
+                </a>
+              )}
+              {showInstall && !androidDevice && (
                 <button
                   type="button"
                   role="menuitem"

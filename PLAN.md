@@ -828,3 +828,64 @@ an episode tile and the bookmark each open the popup. Sign in returns to the ser
 from the popup. No 401 redirects in the network log. Rebuild the container.
 
 Each phase stops for confirmation before the next.
+
+# Ticket: "Install app" in the user menu, hidden only when installed (2026-10-22)
+
+## Findings
+- The Skyworth Google TV stick browser is built on WebView. Its user agent contains `; wv)`, so `isInstalled()` thought
+  it was the Dramora app and hid the menu item.
+- The Dramora APK (`app.dramora`) uses the stock WebView user agent. There's no `DramoraAndroid` marker, so the page
+  can't tell the app apart from a WebView-based browser.
+- First attempt (per-account `hasMobileApp`, localStorage "downloaded" flag) dropped: the user wants the item hidden
+  only when the app is installed on this device.
+
+## Phase 1 (single phase)
+1. `install.tsx` `isInstalled()`: installed means standalone display mode, iOS standalone, or the `DramoraAndroid`
+   user agent marker. A bare `; wv)` no longer counts.
+2. Avatar menu (`Nav.tsx`) shows **Install app** whenever not installed:
+   - Any Android user agent (phones, tablets, Android/Google TV sticks): a direct link to `/dramora.apk`.
+   - iOS and desktop: opens the install dialog.
+   - Non-Android TVs (Tizen, webOS, ...): hidden.
+3. Follow-up outside this repo: the APK should append ` DramoraAndroid` to its WebView user agent so the item hides
+   inside the app.
+**Verify:** `tsc` + `build`, rebuild the container.
+
+# Ticket: Cards that don't overlap, and remote (D-pad) navigation on TV (2026-10-22)
+
+## Findings
+- `ShowCard` hover/focus opens a floating panel (`absolute`, `scale-105`, taller than the card). It covers the
+  neighbouring cards and the next row. `ShowRow` makes room with `pb-40 -mb-40`, so the rows still overlap.
+- The purple border is the global `:focus-visible` outline (`3px solid accent-hi`). The TV browser shows it on
+  every focused button.
+- The Skyworth stick UA says `Google TV` with a space, which `TV_PATTERN` misses, so it's treated as an Android phone.
+- The APK is a plain WebView. Its source isn't in this repo. The remote's D-pad reaches the page as arrow key
+  events, so remote navigation has to come from the web app.
+- Nothing moves focus between cards with arrow keys today. Only Profiles, SearchBox and the player handle arrows.
+
+## Phase 1: Cards that stay in their slot, and a calmer focus style
+1. `ShowCard`: drop the floating panel. On hover (`pointer-fine`) or keyboard focus, the poster lifts slightly
+   (`scale-[1.04]`) with a white ring. A gradient at the poster's bottom shows Play, My List and Share. Nothing
+   leaves the card's box, so neighbours and the next row stay uncovered. The description stays on the show page.
+2. `ShowRow`: remove `pb-40 -mb-40`. Keep a few pixels of padding so the lifted card isn't clipped.
+3. `index.css`: the global `:focus-visible` becomes a 2px white ring (`outline: 2px solid rgb(255 255 255 / .9)`,
+   offset 2px). No purple outlines.
+**Verify:** `tsc` + `build`. Playwright screenshots on desktop: hover a card mid-row and in the first row, check
+that no neighbour or lower row is covered. Tab through a row.
+
+## Phase 2: Remote navigation on TV
+1. `install.tsx`: `TV_PATTERN` also matches `Google TV` and `Android TV` with a space.
+2. New `lib/spatialNav.ts`, started from `main.tsx` when the platform is `tv` or the UA has `DramoraAndroid`:
+   - Arrow keys move focus to the nearest visible focusable element in that direction (by geometry), then
+     `scrollIntoView({ block: 'nearest', inline: 'nearest' })` so rows and the page scroll with focus.
+   - Skipped when the event was already handled (`defaultPrevented`: player, Profiles, search suggestions) or focus
+     is in a text input, select or textarea.
+   - Enter clicks, as browsers already do. On load, focus goes to the hero's Play button.
+3. On TV, each card is one focus stop. Its action buttons and the row scroll arrows get `tabIndex={-1}`; Enter opens
+   the show page, which has Play, My List and Share.
+4. The `html` element gets a `tv` class on TV so styles can enlarge focus rings a little for viewing distance.
+**Verify:** Playwright with the Skyworth UA and a 1920x1080 viewport. Arrow through the nav, hero, and across and
+down rows. Enter opens a show, Enter on Play starts the player, and the player's own arrow keys still seek.
+Rebuild the container.
+
+## Note
+If the APK swallows D-pad keys before the WebView sees them, that needs a change in the app's source (not here).
