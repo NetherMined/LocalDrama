@@ -26,7 +26,7 @@ export function InstallBanner() {
   const [dismissed, setDismissed] = useState(wasDismissed)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  if (installed || dismissed || platform === 'tv') {
+  if (installed || dismissed || platform === 'tv' || platform === 'android') {
     return dialogOpen ? <InstallDialog onClose={() => setDialogOpen(false)} /> : null
   }
 
