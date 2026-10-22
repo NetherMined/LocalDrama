@@ -46,10 +46,10 @@ function looksLikePlaylist(url, contentType) {
 }
 
 export function registerHlsRoutes(app, ctx) {
-  const { entitlements } = ctx;
+  const { streamTokens } = ctx;
   app.get('/api/hls', async (req, reply) => {
     const token = String(req.query?.t || '');
-    if (!entitlements.checkStreamToken(token, req.account?.id)) throw httpError(403, 'stream_token_invalid');
+    if (!streamTokens.checkStreamToken(token, req.account?.id)) throw httpError(403, 'stream_token_invalid');
 
     const raw = String(req.query?.url || '');
     if (!raw) throw httpError(400, 'url is required');

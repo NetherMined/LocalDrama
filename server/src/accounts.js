@@ -10,6 +10,7 @@ const TEMP_LENGTH = 12;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 const MAX_USER_AGENT = 300;
+const MAX_REQUEST_NOTE = 300;
 // Seeded on first start so a fresh server can be signed into; the forced
 // password change on first sign-in replaces it.
 export const DEFAULT_ADMIN_USERNAME = 'Admin';
@@ -71,15 +72,20 @@ export function createAccounts(db, { events }) {
     enabledAdmins: raw.prepare("SELECT COUNT(*) AS n FROM accounts WHERE role = 'admin' AND disabled = 0"),
     anyPassword: raw.prepare("SELECT COUNT(*) AS n FROM accounts WHERE passwordHash IS NOT NULL AND passwordHash <> ''"),
     insertAccount: raw.prepare(`
-      INSERT INTO accounts (username, passwordHash, role, mustChangePassword, disabled, createdAt, createdBy, tier, vipUntil)
-      VALUES (?, ?, ?, ?, 0, ?, ?, 'free', NULL)
+      INSERT INTO accounts (username, passwordHash, role, mustChangePassword, disabled, createdAt, createdBy)
+      VALUES (?, ?, ?, ?, 0, ?, ?)
     `),
+    insertRequest: raw.prepare(`
+      INSERT INTO accounts (username, passwordHash, role, mustChangePassword, disabled, pending, requestNote, createdAt)
+      VALUES (?, ?, 'user', 0, 1, 1, ?, ?)
+    `),
+    approve: raw.prepare('UPDATE accounts SET pending = 0, disabled = 0 WHERE id = ?'),
+    pendingCount: raw.prepare('SELECT COUNT(*) AS n FROM accounts WHERE pending = 1'),
+    enabledAdminIds: raw.prepare("SELECT id FROM accounts WHERE role = 'admin' AND disabled = 0 AND pending = 0"),
     setPassword: raw.prepare('UPDATE accounts SET passwordHash = ?, mustChangePassword = ? WHERE id = ?'),
     setRole: raw.prepare('UPDATE accounts SET role = ? WHERE id = ?'),
     setDisabled: raw.prepare('UPDATE accounts SET disabled = ? WHERE id = ?'),
     setUsername: raw.prepare('UPDATE accounts SET username = ? WHERE id = ?'),
-    setTier: raw.prepare('UPDATE accounts SET tier = ? WHERE id = ?'),
-    setVipUntil: raw.prepare('UPDATE accounts SET vipUntil = ? WHERE id = ?'),
     setLastLogin: raw.prepare('UPDATE accounts SET lastLoginAt = ? WHERE id = ?'),
     deleteAccount: raw.prepare('DELETE FROM accounts WHERE id = ?'),
     profileCount: raw.prepare('SELECT COUNT(*) AS n FROM profiles'),
@@ -183,6 +189,47 @@ export function createAccounts(db, { events }) {
       return stmts.byUsername.get(String(username));
     },
 
+    // Public sign-up. The account can't sign in until an admin approves it.
+    async requestAccess({ username, password, note }) {
+      const name = parseUsername(username);
+      assertUsernameFree(name);
+      const passwordHash = await hashPassword(parseNewPassword(password));
+      const text = typeof note === 'string' ? note.trim().slice(0, MAX_REQUEST_NOTE) : '';
+      const now = new Date().toISOString();
+      const id = raw.transaction(() => {
+        assertUsernameFree(name);
+        const res = stmts.insertRequest.run(name, passwordHash, text || null, now);
+        const accountId = Number(res.lastInsertRowid);
+        const color = PROFILE_COLORS[stmts.profileCount.get().n % PROFILE_COLORS.length];
+        stmts.insertProfile.run(name, color, now, accountId);
+        for (const { id: adminId } of stmts.enabledAdminIds.all()) {
+          addNotification(
+            adminId,
+            'access_request',
+            'New access request',
+            text ? `${name} asked for access: ${text}` : `${name} asked for access`,
+            `/admin/users/${accountId}`,
+          );
+        }
+        return accountId;
+      })();
+      return { ok: true, id };
+    },
+
+    // Activates a pending account from requestAccess and tells the user.
+    approve(id, actorId) {
+      const target = row(id);
+      if (id === actorId) throw httpError(400, 'You cannot approve your own account');
+      if (!target.pending) throw httpError(400, 'This account is not waiting for approval');
+      raw.transaction(() => {
+        stmts.approve.run(id);
+        addNotification(id, 'access_approved', 'Your access was approved', 'You can sign in now.');
+      })();
+      return toAccount(row(id));
+    },
+
+    pendingCount: () => stmts.pendingCount.get().n,
+
     async create({ username, role, createdBy }) {
       const name = parseUsername(username);
       const roleValue = role === undefined ? 'user' : parseRole(role);
@@ -284,21 +331,6 @@ export function createAccounts(db, { events }) {
         assertKeepsAnEnabledAdmin(target);
       }
       stmts.setRole.run(next, id);
-      return toAccount(row(id));
-    },
-
-    setTier(id, tier) {
-      const target = row(id);
-      if (tier !== 'free' && tier !== 'vip') throw httpError(400, 'tier must be free or vip');
-      if (target.tier === tier) return toAccount(target);
-      stmts.setTier.run(tier, id);
-      return toAccount(row(id));
-    },
-
-    // null means VIP never expires. Callers pass a validated ISO string.
-    setVipUntil(id, vipUntil) {
-      row(id);
-      stmts.setVipUntil.run(vipUntil, id);
       return toAccount(row(id));
     },
 

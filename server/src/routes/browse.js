@@ -5,7 +5,6 @@ import { isHlsUrl } from '../platforms/common.js';
 import { parseCount } from '../normalize.js';
 import { queryTokens } from '../db.js';
 import { hlsProxyUrl } from './hls.js';
-import { gatedShow } from '../entitlements.js';
 
 const CATEGORY_LIMIT = 30;
 const CATEGORY_MIN_CACHED = 10;
@@ -171,7 +170,7 @@ async function searchFirstPage(ctx, q, source) {
 }
 
 export function registerBrowseRoutes(app, ctx) {
-  const { db, provider, entitlements } = ctx;
+  const { db, provider, streamTokens } = ctx;
 
   app.get('/api/browse/latest', async (req) => {
     const page = pageParam(req.query.page);
@@ -198,7 +197,7 @@ export function registerBrowseRoutes(app, ctx) {
     const sorter = SORTERS.get(String(req.query.sort || ''));
     if (sorter) items = [...items].sort(sorter);
 
-    return { items: entitlements.viewer(req.account).annotate(items), hasMore: !!result.hasMore, source: resolved };
+    return { items, hasMore: !!result.hasMore, source: resolved };
   });
 
   app.get('/api/browse/categories', async (req) => {
@@ -249,23 +248,22 @@ export function registerBrowseRoutes(app, ctx) {
       const result = await provider.search(q, page, { sourceId: source });
       const items = result.items || [];
       db.upsertShows(items);
-      return { items: entitlements.viewer(req.account).annotate(items), hasMore: !!result.hasMore, platforms: [], errors: [] };
+      return { items, hasMore: !!result.hasMore, platforms: [], errors: [] };
     }
 
     // Instant first paint for the Search page while the platforms are still being asked.
     if (req.query.local === '1') {
       const items = db.searchLocal(q, { limit: LOCAL_SEARCH_LIMIT, sourceId: source });
-      return { items: entitlements.viewer(req.account).annotate(items), hasMore: false, platforms: [], errors: [] };
+      return { items, hasMore: false, platforms: [], errors: [] };
     }
 
     const key = `${q.toLowerCase().replace(/\s+/g, ' ')}|${source || ''}`;
-    // The cache is shared by every account, so access is added per request.
     let value = searchCacheGet(key);
     if (!value) {
       value = await searchFirstPage(ctx, q, source);
       searchCacheSet(key, value);
     }
-    return { ...value, items: entitlements.viewer(req.account).annotate(value.items) };
+    return value;
   });
 
   app.get('/api/search/suggest', async (req) => {
@@ -292,9 +290,6 @@ export function registerBrowseRoutes(app, ctx) {
       ctx.db.raw.prepare('SELECT * FROM downloads WHERE bookId = ?').all(bookId).map((r) => [r.episodeIndex, r]),
     );
 
-    const viewer = entitlements.viewer(req.account);
-    const subject = gatedShow(show, bookId, sourceId);
-
     const episodes = chapters.map((c) => {
       const row = rows.get(c.index);
       return {
@@ -303,13 +298,12 @@ export function registerBrowseRoutes(app, ctx) {
         name: c.name,
         downloaded: !!row && row.status === 'completed' && !!row.filePath && fs.existsSync(row.filePath),
         downloadStatus: row?.status,
-        access: viewer.episodeAccess(subject, c.index),
       };
     });
 
     ctx.follows?.checkBook(bookId, episodes.length);
 
-    return { show: show ? { ...show, access: viewer.showAccess(subject) } : null, source: sourceId ?? show?.source ?? null, episodes };
+    return { show, source: sourceId ?? show?.source ?? null, episodes };
   });
 
   app.get('/api/shows/:bookId/stream/:index', async (req) => {
@@ -318,13 +312,11 @@ export function registerBrowseRoutes(app, ctx) {
     if (!Number.isInteger(index) || index < 0) throw httpError(400, 'Invalid episode index');
 
     const sourceId = optionalSource(req.query.source);
-    const lock = entitlements.lockFor(req.account, gatedShow(db.getShow(bookId), bookId, sourceId), index);
-    if (lock) throw httpError(403, 'vip_required', lock);
 
     const url = await provider.streamUrl(bookId, index, { sourceId });
     const hls = isHlsUrl(url);
     return {
-      url: hls ? hlsProxyUrl(url, entitlements.streamToken(req.account.id)) : url,
+      url: hls ? hlsProxyUrl(url, streamTokens.streamToken(req.account.id)) : url,
       hls,
     };
   });

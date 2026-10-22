@@ -9,12 +9,13 @@ import {
   verifyPassword,
 } from '../auth.js';
 import { clearProfileCookie } from '../profiles.js';
-import { clearShareCookie, readShareCode } from './rewards.js';
 
 const IP_WINDOW_MS = 60 * 1000;
 const IP_MAX_ATTEMPTS = 5;
 const USER_WINDOW_MS = 15 * 60 * 1000;
 const USER_MAX_ATTEMPTS = 10;
+const REQUEST_WINDOW_MS = 60 * 60 * 1000;
+const REQUEST_MAX_ATTEMPTS = 3;
 const MAX_TRACKED_KEYS = 10000;
 
 export function limiter(windowMs, max) {
@@ -30,9 +31,10 @@ export function limiter(windowMs, max) {
 }
 
 export function registerAuthRoutes(app, ctx) {
-  const { auth, accounts, profiles, rewards } = ctx;
+  const { auth, accounts, profiles } = ctx;
   const overIpLimit = limiter(IP_WINDOW_MS, IP_MAX_ATTEMPTS);
   const overUserLimit = limiter(USER_WINDOW_MS, USER_MAX_ATTEMPTS);
+  const overRequestLimit = limiter(REQUEST_WINDOW_MS, REQUEST_MAX_ATTEMPTS);
   // Checked against when the account can't sign in, so the response time doesn't reveal
   // which usernames exist.
   const dummyHash = hashPassword('dramaus-timing-guard');
@@ -62,18 +64,20 @@ export function registerAuthRoutes(app, ctx) {
     if (overUserLimit(username.toLowerCase())) throw httpError(429, 'Too many login attempts for this account. Try again later.');
 
     const account = accounts.findByUsername(username);
-    const usable = !!account && !account.disabled && !!account.passwordHash;
-    const matches = await verifyPassword(password, usable ? account.passwordHash : await dummyHash);
-    const ok = usable && matches;
-    if (!ok) throw httpError(401, 'Invalid username or password');
-    const result = signIn(req, reply, account.id);
-    const shareCode = readShareCode(req);
-    if (shareCode) {
-      rewards.openShare(shareCode, result.account);
-      reply.header('Set-Cookie', [...reply.getHeader('Set-Cookie'), clearShareCookie()]);
-    }
-    rewards.grantDueGifts(result.account);
-    return result;
+    const hasHash = !!account && !!account.passwordHash;
+    const matches = await verifyPassword(password, hasHash ? account.passwordHash : await dummyHash);
+    if (!hasHash || !matches) throw httpError(401, 'Invalid username or password');
+    // Checked after the password, so only the person who made the request sees this message.
+    if (account.pending) throw httpError(403, 'Your access request is waiting for an admin to approve it');
+    if (account.disabled) throw httpError(401, 'Invalid username or password');
+    return signIn(req, reply, account.id);
+  });
+
+  app.post('/api/auth/request-access', async (req) => {
+    if (overRequestLimit(req.ip)) throw httpError(429, 'Too many access requests from this address. Try again later.');
+    const body = req.body ?? {};
+    await accounts.requestAccess({ username: body.username, password: body.password, note: body.note });
+    return { ok: true };
   });
 
   app.post('/api/auth/logout', async (req, reply) => {

@@ -13,35 +13,6 @@ export function defaultIntegrations() {
   };
 }
 
-// Bumped when the plan's shape changes; a stored plan from another version is replaced by the defaults.
-export const PLAN_VERSION = 2;
-
-// Free vs VIP rules. Every number here is editable by an admin in Settings.
-export function defaultPlan() {
-  return {
-    version: PLAN_VERSION,
-    vipPlatforms: ['dramabox', 'reelshort', 'shortmax', 'netshort', 'dramawave', 'goodshort'],
-    // A series is VIP when it is in the top share of its platform by play count,
-    // or has at least popularMinPlays plays (0 turns the absolute rule off).
-    popularShare: 0.2,
-    popularMinPlays: 0,
-    welcomeGiftEveryDays: 7,
-    dailyRewards: [
-      { kind: 'points', value: 20, weight: 50 },
-      { kind: 'episodes', value: 5, weight: 30 },
-      { kind: 'series', value: 1, weight: 20 },
-    ],
-    streakDays: 7,
-    streakBonus: 10,
-    sharePoints: 10,
-    shareMaxPerDay: 3,
-    shareJoinBonus: 25,
-    episodesPerUnlock: 5,
-    platformUnlockHours: 24,
-    prices: { series: 100, seriesMyList: 60, platform: 300, episodes: 40 },
-  };
-}
-
 const GOODBOS_PLATFORMS = [
   { id: 'dramabox', name: 'DramaBox', base: 'https://dramabox.goodbos.online' },
   { id: 'reelshort', name: 'ReelShort', base: 'https://reelshort.goodbos.online' },
@@ -119,19 +90,12 @@ export const DEFAULT_CONFIG = {
   activeSourceId: 'dramabox',
   sources: defaultSources(),
   integrations: defaultIntegrations(),
-  plan: defaultPlan(),
 };
 
 function mergeIntegrations(stored) {
   const merged = defaultIntegrations();
   for (const key of Object.keys(merged)) Object.assign(merged[key], stored?.[key] ?? {});
   return merged;
-}
-
-export function mergePlan(stored) {
-  const defaults = defaultPlan();
-  if (!stored || typeof stored !== 'object' || stored.version !== PLAN_VERSION) return defaults;
-  return { ...defaults, ...stored, version: PLAN_VERSION, prices: { ...defaults.prices, ...(stored.prices || {}) } };
 }
 
 function mergeSources(stored) {
@@ -172,12 +136,13 @@ export function loadConfig() {
   } catch {
     stored = {};
   }
+  // The free/VIP plan was removed; a stored plan is dropped on the next save.
+  delete stored.plan;
   fileConfig = {
     ...DEFAULT_CONFIG,
     ...stored,
     integrations: mergeIntegrations(stored.integrations),
     sources: mergeSources(stored.sources),
-    plan: mergePlan(stored.plan),
   };
   current = applyEnv(fileConfig);
   return current;
@@ -191,7 +156,6 @@ export function saveConfig(patch) {
   if (!fileConfig) loadConfig();
   fileConfig = { ...fileConfig, ...patch };
   if (patch.sources) fileConfig.sources = mergeSources(patch.sources);
-  if (patch.plan) fileConfig.plan = mergePlan(patch.plan);
   const tmp = `${CONFIG_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(fileConfig, null, 2));
   fs.renameSync(tmp, CONFIG_FILE);

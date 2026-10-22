@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 import DramaboxClient from '@zhadev/dramabox';
 import { normalizeShow } from './normalize.js';
 import { httpError } from './errors.js';
+import { getProxyUrl } from './proxy.js';
 
 const FIXTURES_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 const CHAPTER_TTL_MS = 10 * 60 * 1000;
 const RETRY_DELAYS_MS = [2000, 4000];
 const BLOCKED_MESSAGE = 'Dramabox API refused the request (HTTP 403). It is likely blocked in your region — configure a proxy outside it (setup → Connection, or DRAMABOX_PROXY).';
+const BLOCKED_VIA_PROXY_MESSAGE = 'Dramabox API refused the request (HTTP 403) even through the proxy. Datacenter proxy IPs are often blocked (try a residential proxy), or the @zhadev/dramabox client may need an update after a Dramabox API change.';
 
 const fixtureCache = new Map();
 function readFixture(name) {
@@ -21,7 +23,7 @@ function readFixture(name) {
 function unwrap(res) {
   if (!res || !res.success) {
     const message = String(res?.message || 'Dramabox API request failed');
-    if (/403|Access Denied/i.test(message)) throw httpError(502, BLOCKED_MESSAGE);
+    if (/403|Access Denied/i.test(message)) throw httpError(502, getProxyUrl() ? BLOCKED_VIA_PROXY_MESSAGE : BLOCKED_MESSAGE);
     throw httpError(502, message);
   }
   return res.data;
@@ -130,10 +132,6 @@ export function createProvider({ mock, port, language, requestDelay, proxyUrl })
 
     dubIndo() {
       return shelf('getDubIndo', () => client.getDubIndo('terpopuler', 1, 20));
-    },
-
-    vip() {
-      return shelf('getVip', () => client.getVip());
     },
 
     async search(q, page = 1) {

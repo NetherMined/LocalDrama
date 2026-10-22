@@ -15,8 +15,7 @@ import { createProfiles } from './profiles.js';
 import { createProgress } from './progress.js';
 import { createMdns } from './mdns.js';
 import { sendRanged } from './stream.js';
-import { createEntitlements } from './entitlements.js';
-import { createRewards } from './rewards.js';
+import { createStreamTokens } from './streamTokens.js';
 import { lanUrls, registerSystemRoutes, checkWritableDir, VERSION } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountRoutes } from './routes/account.js';
@@ -34,7 +33,6 @@ import { registerFavouriteRoutes } from './routes/favourites.js';
 import { registerHlsRoutes } from './routes/hls.js';
 import { registerClientLogRoutes } from './routes/clientLog.js';
 import { registerSocialRoutes } from './routes/social.js';
-import { registerRewardsRoutes } from './routes/rewards.js';
 import { createFollowChecker } from './follows.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +45,20 @@ const MOCK_FLAKY = process.env.DRAMABOX_MOCK_FLAKY === '1';
 const MOCK_BYTES_PER_SEC = 24 * 1024;
 const PUBLIC_API = new Set(['/api/status', '/api/health']);
 const PASSWORD_CHANGE_ALLOWED = new Set(['/api/account', '/api/account/password', '/api/status', '/api/auth/logout']);
+const GUEST_READABLE_API = new Set([
+  '/api/home',
+  '/api/browse/latest',
+  '/api/browse/categories',
+  '/api/browse/sources',
+  '/api/search',
+  '/api/search/suggest',
+]);
+const GUEST_SHOW_PATH = /^\/api\/shows\/[^/]+$/;
+
+function isGuestReadable(req, url) {
+  if (req.method !== 'GET') return false;
+  return GUEST_READABLE_API.has(url) || GUEST_SHOW_PATH.test(url);
+}
 
 const config = loadConfig();
 const db = openDb(DATA_DIR, { legacyPasswordHash: config.passwordHash });
@@ -55,8 +67,7 @@ const events = createEvents();
 const accounts = createAccounts(db, { events });
 await accounts.seedDefaultAdmin();
 
-const entitlements = createEntitlements(db);
-const rewards = createRewards(db, { accounts, entitlements });
+const streamTokens = createStreamTokens();
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
@@ -94,8 +105,7 @@ const ctx = {
   profiles,
   progress,
   follows,
-  entitlements,
-  rewards,
+  streamTokens,
   mdns,
   port: PORT,
   mock: MOCK,
@@ -123,6 +133,13 @@ app.addHook('onRequest', async (req, reply) => {
   if (!guarded || PUBLIC_API.has(url) || url.startsWith('/api/auth/')) return;
   if (url.startsWith('/api/setup') && !getConfig().configured) return;
   const account = auth.accountFromRequest(req);
+  if (isGuestReadable(req, url)) {
+    if (account?.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(url)) {
+      return reply.code(403).send({ error: 'password_change_required' });
+    }
+    req.account = account || null;
+    return;
+  }
   if (!account) return reply.code(401).send({ error: 'sign_in_required' });
   if (account.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(url)) {
     return reply.code(403).send({ error: 'password_change_required' });
@@ -152,7 +169,6 @@ registerDownloadRoutes(app, ctx);
 registerLibraryRoutes(app, ctx);
 registerFavouriteRoutes(app, ctx);
 registerSocialRoutes(app, ctx);
-registerRewardsRoutes(app, ctx);
 registerClientLogRoutes(app);
 app.get('/api/events', (req, reply) => {
   events.subscribe(req, reply);

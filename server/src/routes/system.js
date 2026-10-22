@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import DramaboxClient from '@zhadev/dramabox';
-import { getConfig, mergePlan, saveConfig } from '../config.js';
+import { getConfig, saveConfig } from '../config.js';
 import { httpError } from '../errors.js';
 import { buildAgent, getProxyUrl, maskProxyUrl, parseProxyUrl, setProxy } from '../proxy.js';
 import { isWindowsPath } from '../paths.js';
@@ -119,69 +119,7 @@ function parseSettings(body, { requireLanguage }) {
   }
   const proxy = resolveIncomingProxy(body.proxyUrl);
   if (proxy !== undefined) patch.proxyUrl = proxy;
-  if (body.plan !== undefined) patch.plan = parsePlan(body.plan);
   return patch;
-}
-
-const PLAN_INTS = {
-  popularMinPlays: [0, 1e12],
-  welcomeGiftEveryDays: [1, 365],
-  streakDays: [0, 365],
-  streakBonus: [0, 10000],
-  sharePoints: [0, 10000],
-  shareMaxPerDay: [0, 100],
-  shareJoinBonus: [0, 10000],
-  episodesPerUnlock: [1, 100],
-  platformUnlockHours: [1, 720],
-};
-const PRICE_KEYS = ['series', 'seriesMyList', 'platform', 'episodes'];
-const DAILY_KINDS = new Set(['points', 'episodes', 'series']);
-
-function intIn(value, [min, max], name) {
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < min || n > max) throw httpError(400, `plan.${name} must be a whole number ${min}-${max}`);
-  return n;
-}
-
-// Partial update of the free plan: only the keys sent change.
-function parsePlan(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw httpError(400, 'plan must be an object');
-  const current = getConfig().plan;
-  const next = { ...current, prices: { ...current.prices } };
-  if (input.vipPlatforms !== undefined) {
-    const known = new Set((getConfig().sources || []).map((s) => s.id));
-    if (!Array.isArray(input.vipPlatforms) || input.vipPlatforms.some((id) => !known.has(id))) {
-      throw httpError(400, 'plan.vipPlatforms must list known platform ids');
-    }
-    next.vipPlatforms = [...new Set(input.vipPlatforms)];
-  }
-  if (input.popularShare !== undefined) {
-    const n = Number(input.popularShare);
-    if (!Number.isFinite(n) || n < 0 || n > 1) throw httpError(400, 'plan.popularShare must be 0-1');
-    next.popularShare = n;
-  }
-  for (const [key, range] of Object.entries(PLAN_INTS)) {
-    if (input[key] !== undefined) next[key] = intIn(input[key], range, key);
-  }
-  if (input.prices !== undefined) {
-    if (!input.prices || typeof input.prices !== 'object') throw httpError(400, 'plan.prices must be an object');
-    for (const key of PRICE_KEYS) {
-      if (input.prices[key] !== undefined) next.prices[key] = intIn(input.prices[key], [0, 100000], `prices.${key}`);
-    }
-  }
-  if (input.dailyRewards !== undefined) {
-    const list = input.dailyRewards;
-    if (!Array.isArray(list) || !list.length || list.some((r) => !DAILY_KINDS.has(r?.kind))) {
-      throw httpError(400, 'plan.dailyRewards must list points, episodes or series rewards');
-    }
-    next.dailyRewards = list.map((r) => ({
-      kind: r.kind,
-      value: intIn(r.value, [1, 1000], 'dailyRewards.value'),
-      weight: intIn(r.weight, [0, 1000], 'dailyRewards.weight'),
-    }));
-    if (!next.dailyRewards.some((r) => r.weight > 0)) throw httpError(400, 'At least one daily reward needs a weight above 0');
-  }
-  return mergePlan(next);
 }
 
 function publicConfig(ctx) {
@@ -193,24 +131,50 @@ function publicConfig(ctx) {
   };
 }
 
-function fetchIpInfo(agent) {
+// Egress lookups are informational; several services because each one blocks some proxy IPs.
+const EGRESS_SERVICES = [
+  { url: 'https://ipinfo.io/json', pick: (j) => ({ ip: j.ip, country: j.country }) },
+  { url: 'https://ipapi.co/json/', pick: (j) => ({ ip: j.ip, country: j.country_code || j.country }) },
+  { url: 'https://ifconfig.co/json', pick: (j) => ({ ip: j.ip, country: j.country_iso }) },
+];
+
+function getJson(url, agent) {
+  const host = new URL(url).hostname;
   return new Promise((resolve, reject) => {
-    const req = https.get('https://ipinfo.io/json', { agent, timeout: 10000, headers: { Accept: 'application/json' } }, (res) => {
+    const req = https.get(url, {
+      agent,
+      timeout: 10000,
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' },
+    }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (c) => { body += c; });
       res.on('end', () => {
-        if (res.statusCode !== 200) return reject(new Error(`ipinfo.io returned HTTP ${res.statusCode}`));
+        if (res.statusCode !== 200) return reject(new Error(`${host} returned HTTP ${res.statusCode}`));
         try {
           resolve(JSON.parse(body));
         } catch {
-          reject(new Error('ipinfo.io returned invalid JSON'));
+          reject(new Error(`${host} returned invalid JSON`));
         }
       });
     });
-    req.on('timeout', () => req.destroy(new Error('Timed out after 10s')));
+    req.on('timeout', () => req.destroy(new Error(`${host} timed out after 10s`)));
     req.on('error', reject);
   });
+}
+
+async function fetchEgress(agent) {
+  const errors = [];
+  for (const service of EGRESS_SERVICES) {
+    try {
+      const info = service.pick(await getJson(service.url, agent));
+      if (info.ip) return info;
+      errors.push(`${new URL(service.url).hostname} returned no IP`);
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+  throw new Error(errors.join('; '));
 }
 
 async function testDramaboxToken(url, language) {
@@ -242,11 +206,13 @@ export function registerSystemRoutes(app, ctx) {
       upstream: ctx.provider.health(),
       authRequired: true,
       authenticated: !!account,
+      guestBrowsing: true,
       account: account ? { id: account.id, username: account.username, role: account.role, mustChangePassword: account.mustChangePassword } : null,
       needsBootstrap: ctx.accounts.needsBootstrap(),
       defaultCredentials: ctx.accounts.defaultCredentialsActive(),
       profile,
       profileRequired: !profile,
+      ...(account?.role === 'admin' ? { pendingRequests: ctx.accounts.pendingCount() } : {}),
     };
   });
 
@@ -281,7 +247,7 @@ export function registerSystemRoutes(app, ctx) {
     let ipError = null;
     try {
       const agent = await buildAgent(url);
-      const info = await fetchIpInfo(agent);
+      const info = await fetchEgress(agent);
       ip = info.ip ?? null;
       country = info.country ?? null;
     } catch (err) {
@@ -292,11 +258,15 @@ export function registerSystemRoutes(app, ctx) {
     let apiError = null;
     if (!ctx.mock) {
       ({ apiOk, error: apiError } = await testDramaboxToken(url, getConfig().language));
+      if (apiError && /403|Access Denied/i.test(apiError)) {
+        apiError = 'Dramabox refused the connection (HTTP 403 Access Denied). This proxy IP is blocked; datacenter IPs often are, so try a residential proxy.';
+      }
     }
 
-    const ok = !ipError;
-    const error = ipError ? `Proxy check failed: ${ipError}` : apiError ?? undefined;
-    return { ok, ip, country, apiOk, error };
+    // A working Dramabox connection proves the proxy works even if no IP lookup service answered.
+    const ok = !ipError || apiOk;
+    const notes = [apiError, ipError && `Could not look up the proxy's IP (${ipError})`].filter(Boolean);
+    return { ok, ip, country, apiOk, error: notes.length ? notes.join(' · ') : undefined };
   });
 
   app.post('/api/setup', async (req) => {

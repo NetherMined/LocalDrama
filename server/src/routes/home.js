@@ -9,6 +9,9 @@ const ROW_SIZE = 24;
 const GENRE_ROWS = 3;
 const GENRE_MIN_SHOWS = 6;
 const POPULAR_MIN_COUNTS = 6;
+const FEATURED_COUNT = 5;
+const HOT_COUNT = 10;
+const NEW_PER_PLATFORM = 2;
 
 function withTimeout(promise, ms) {
   let timer;
@@ -61,7 +64,7 @@ function slugify(key) {
 }
 
 export function registerHomeRoutes(app, ctx) {
-  const { db, provider, entitlements } = ctx;
+  const { db, provider } = ctx;
   let cache = null;
   const sourceCache = new Map();
 
@@ -77,6 +80,10 @@ export function registerHomeRoutes(app, ctx) {
       errors.push({ key: source.id, error: String(err?.message || err) });
       return [];
     }
+  }
+
+  function guestView(value, req) {
+    return req.account ? value : { ...value, errors: [] };
   }
 
   async function build(refresh) {
@@ -118,10 +125,19 @@ export function registerHomeRoutes(app, ctx) {
     }
 
     const unique = dedupe(all);
+    const byPlays = (a, b) => parseCount(b.playCount) - parseCount(a.playCount);
+    const hotKeys = new Set(
+      unique.filter((s) => parseCount(s.playCount) > 0).sort(byPlays).slice(0, HOT_COUNT).map(showKey),
+    );
+    const newKeys = new Set(fetched.flatMap((f) => f.items.slice(0, NEW_PER_PLATFORM).map(showKey)));
+    const badged = (s) => {
+      const key = showKey(s);
+      return { ...s, badge: hotKeys.has(key) ? 'Hot' : newKeys.has(key) ? 'New' : null };
+    };
     const withPlays = unique.filter((s) => parseCount(s.playCount) > 0);
     if (withPlays.length >= POPULAR_MIN_COUNTS) {
       const popular = [...unique]
-        .sort((a, b) => parseCount(b.playCount) - parseCount(a.playCount))
+        .sort(byPlays)
         .slice(0, ROW_SIZE);
       rows.push({ key: 'new-popular', title: 'New & Popular', items: popular });
     }
@@ -150,15 +166,33 @@ export function registerHomeRoutes(app, ctx) {
       rows.push({ key: `genre-${slugify(genre.key)}`, title: genre.name, items });
     }
 
+    for (const row of rows) row.items = row.items.map(badged);
+
+    // The same series is often listed by several platforms, so the slider dedupes by title too.
+    const featuredNames = new Set();
+    const featured = unique
+      .filter((s) => s.cover)
+      .sort((a, b) => byPlays(a, b) || (b.introduction ? 1 : 0) - (a.introduction ? 1 : 0))
+      .filter((s) => {
+        const name = String(s.name || '').trim().toLowerCase();
+        if (featuredNames.has(name)) return false;
+        featuredNames.add(name);
+        return true;
+      })
+      .slice(0, FEATURED_COUNT)
+      .map(badged);
+
     const heroPick = (items) => items?.find((s) => s.cover && s.introduction);
     const heroRow = rows.find((r) => r.key === `latest-${cfg.activeSourceId}`);
-    const hero = heroPick(heroRow?.items)
-      || rows.map((r) => heroPick(r.items)).find(Boolean)
-      || rows[0]?.items?.[0]
-      || null;
+    const hero = featured[0]
+      ?? heroPick(heroRow?.items)
+      ?? rows.map((r) => heroPick(r.items)).find(Boolean)
+      ?? rows[0]?.items?.[0]
+      ?? null;
 
     return {
       hero,
+      featured,
       rows,
       errors,
       activeSourceId: cfg.activeSourceId,
@@ -166,18 +200,9 @@ export function registerHomeRoutes(app, ctx) {
     };
   }
 
-  // The cached payload is shared by every account, so access is added per request.
-  function withAccess(value, account) {
-    const viewer = entitlements.viewer(account);
-    return {
-      ...value,
-      hero: value.hero ? { ...value.hero, access: viewer.showAccess(value.hero) } : null,
-      rows: value.rows.map((row) => ({ ...row, items: viewer.annotate(row.items) })),
-    };
-  }
-
   app.get('/api/home', async (req) => {
-    const refresh = req.query.refresh === '1';
+    // A refresh re-fetches every platform, so only signed-in users can ask for one.
+    const refresh = !!req.account && req.query.refresh === '1';
     const cfg = getConfig();
     // Switching sources or toggling platforms must not serve the old home
     // payload for five minutes.
@@ -186,10 +211,10 @@ export function registerHomeRoutes(app, ctx) {
       ...(cfg.sources || []).filter((s) => s.enabled && !isKeyOnly(s)).map((s) => s.id),
     ].join('|');
     if (!refresh && cache && cache.signature === signature && Date.now() - cache.at < CACHE_TTL_MS) {
-      return withAccess(cache.value, req.account);
+      return guestView(cache.value, req);
     }
     const value = await build(refresh);
     cache = { at: Date.now(), value, signature };
-    return withAccess(value, req.account);
+    return guestView(value, req);
   });
 }

@@ -237,7 +237,6 @@ export function createMultiProvider({ mock, port, language, requestDelay, resolv
     recommended: () => withSource(async () => []),
     comingSoon: () => withSource(async () => []),
     dubIndo: () => withSource(async () => []),
-    vip: () => withSource(async () => []),
     search,
     suggest: async (q) => (await search(q, 1)).items.slice(0, 8),
     chapters,
