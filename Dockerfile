@@ -1,3 +1,8 @@
+# Dramora image.
+# The server listens on 0.0.0.0:8096.
+# Mount /data for settings and the database, and /media for downloaded episodes.
+# Set PUBLIC_URL (see docker-compose.yml) to the address other devices should use.
+
 FROM node:22-bookworm-slim AS web-build
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
