@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom'
 import { api, type AdminActivitySummary, type AdminUserRow } from '../api'
 import { CreateUserDialog } from '../components/CreateUserDialog'
 import { PlusIcon } from '../components/icons'
-import { TierBadge } from '../components/TierBadge'
+import { PendingActions } from '../components/PendingActions'
 import { RoleBadge, StatusBadges, UserInitial } from '../components/UserBadges'
 import { UserActions, type Notify } from '../components/UserActions'
 import { Toast, useToast } from '../components/Toast'
 import { LoadError, PageHeader, buttonClass } from '../components/ui'
-import { errorMessage, fmtAgoOrNever, fmtWatchTime } from '../lib/format'
+import { errorMessage, fmtAgoOrNever, fmtDate, fmtWatchTime } from '../lib/format'
 import { useStatus } from '../status'
 
 interface UserRowData {
@@ -41,6 +41,9 @@ export function AdminUsers() {
     void load()
   }, [load])
 
+  const pending = rows?.filter((row) => row.user.pending) ?? []
+  const accounts = rows?.filter((row) => !row.user.pending) ?? []
+
   return (
     <>
       <PageHeader title="Users">
@@ -61,11 +64,13 @@ export function AdminUsers() {
         </div>
       )}
 
-      {rows && rows.length === 0 && (
+      {rows && pending.length > 0 && <PendingRequests rows={pending} onChanged={() => void load()} onNotify={notify} />}
+
+      {rows && accounts.length === 0 && pending.length === 0 && (
         <p className="rounded-xl border border-dashed border-line px-6 py-14 text-center text-sm text-muted">No accounts yet.</p>
       )}
 
-      {rows && rows.length > 0 && (
+      {accounts.length > 0 && (
         <>
           <div className="relative hidden overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] md:block">
             <table className="w-full min-w-[880px] text-left text-sm">
@@ -86,7 +91,7 @@ export function AdminUsers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {rows.map((row) => (
+                {accounts.map((row) => (
                   <UserTableRow
                     key={row.user.id}
                     row={row}
@@ -100,7 +105,7 @@ export function AdminUsers() {
           </div>
 
           <ul className="space-y-3 md:hidden">
-            {rows.map((row) => (
+            {accounts.map((row) => (
               <UserCard
                 key={row.user.id}
                 row={row}
@@ -123,6 +128,45 @@ export function AdminUsers() {
 
       <Toast toast={toast} />
     </>
+  )
+}
+
+function PendingRequests({
+  rows,
+  onChanged,
+  onNotify,
+}: {
+  rows: UserRowData[]
+  onChanged: () => void
+  onNotify: Notify
+}) {
+  return (
+    <section aria-labelledby="pending-requests" className="mb-8 space-y-3">
+      <h2 id="pending-requests" className="flex items-center gap-2 text-lg font-bold">
+        Pending requests
+        <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white tabular-nums">{rows.length}</span>
+      </h2>
+      <ul className="space-y-3">
+        {rows.map(({ user }) => (
+          <li key={user.id} className="rounded-xl border border-accent/40 bg-white/[0.03] p-4 sm:p-5">
+            <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <Link to={`/admin/users/${user.id}`} className="font-semibold text-white hover:text-accent-text">
+                  {user.username}
+                </Link>
+                <p className="mt-1 text-xs text-muted">Requested {fmtDate(user.createdAt)}</p>
+                <p className={`mt-2 text-sm break-words whitespace-pre-line ${user.requestNote ? 'text-white/85' : 'text-muted italic'}`}>
+                  {user.requestNote || 'No note was added.'}
+                </p>
+              </div>
+              <div className="shrink-0">
+                <PendingActions user={user} onDone={onChanged} onNotify={onNotify} />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -159,7 +203,6 @@ function UserTableRow({
       <td className={cellClass}>
         <div className="flex flex-wrap gap-1.5">
           <RoleBadge role={user.role} />
-          <TierBadge tier={user.tier} vipUntil={user.vipUntil} role={user.role} />
         </div>
       </td>
       <td className={cellClass}>
@@ -209,7 +252,6 @@ function UserCard({
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-2">
               <RoleBadge role={user.role} />
-              <TierBadge tier={user.tier} vipUntil={user.vipUntil} role={user.role} />
               <StatusBadges user={user} />
             </p>
           </div>

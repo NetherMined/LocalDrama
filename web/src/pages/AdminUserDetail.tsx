@@ -11,7 +11,7 @@ import {
 } from '../api'
 import { ChevronLeftIcon } from '../components/icons'
 import { ShowCard, showGridClass, showPath } from '../components/ShowCard'
-import { TierControls } from '../components/TierControls'
+import { PendingActions } from '../components/PendingActions'
 import { Toast, useToast } from '../components/Toast'
 import { UserActions } from '../components/UserActions'
 import { RoleBadge, StatusBadges, UserInitial } from '../components/UserBadges'
@@ -171,17 +171,39 @@ export function AdminUserDetail() {
             </p>
           </div>
         </div>
-        <UserActions
-          user={account}
-          isSelf={isSelf}
-          variant="buttons"
-          onChanged={() => void load()}
-          onDeleted={() => navigate('/admin/users')}
-          onNotify={notify}
-        />
+        {!account.pending && (
+          <UserActions
+            user={account}
+            isSelf={isSelf}
+            variant="buttons"
+            onChanged={() => void load()}
+            onDeleted={() => navigate('/admin/users')}
+            onNotify={notify}
+          />
+        )}
       </header>
 
-      <TierControls key={`${account.tier}-${account.vipUntil ?? 'never'}`} user={account} onChanged={() => void load()} onNotify={notify} />
+      {account.pending && (
+        <section aria-labelledby={`${uid}-request`} className="space-y-4 rounded-xl border border-accent/40 bg-white/[0.03] p-5 sm:p-6">
+          <div>
+            <h2 id={`${uid}-request`} className="text-base font-bold">
+              Access request waiting for approval
+            </h2>
+            <p className="mt-1 text-sm text-muted">Requested {fmtDate(account.createdAt)}</p>
+          </div>
+          <p className={`text-sm break-words whitespace-pre-line ${account.requestNote ? 'text-white/85' : 'text-muted italic'}`}>
+            {account.requestNote || 'No note was added.'}
+          </p>
+          <PendingActions
+            user={account}
+            onDone={(outcome) => {
+              if (outcome === 'rejected') navigate('/admin/users')
+              else void load()
+            }}
+            onNotify={notify}
+          />
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {tiles.map((tile) => (

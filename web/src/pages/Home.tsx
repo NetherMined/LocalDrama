@@ -71,6 +71,7 @@ export function Home() {
   const [hasDownloads, setHasDownloads] = useState(false)
   const { status } = useStatus()
   const isAdmin = status?.account?.role === 'admin'
+  const signedIn = !!status?.authenticated
 
   const load = useCallback(async (refresh: boolean) => {
     setRefreshing(true)
@@ -89,6 +90,7 @@ export function Home() {
   }, [load])
 
   useEffect(() => {
+    if (!signedIn) return
     let cancelled = false
     Promise.allSettled([api.continueWatching(), api.watchContinue()]).then(([downloads, streams]) => {
       if (cancelled) return
@@ -103,7 +105,7 @@ export function Home() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [signedIn])
 
   if (!data && error) {
     return (
@@ -115,21 +117,20 @@ export function Home() {
 
   if (!data) {
     return (
-      <div className="space-y-8 px-4 py-6 sm:px-6 lg:px-10" aria-busy="true" aria-label="Loading home">
-        <div className="h-[60svh] min-h-[360px] animate-pulse bg-panel-2 sm:h-[70vh] sm:min-h-[420px] short:h-[85svh] short:min-h-0" />
-        {SKELETON_ROWS.map((title) => (
-          <ShowRowSkeleton key={title} title={title} />
-        ))}
+      <div aria-busy="true" aria-label="Loading home">
+        <div className="-mt-16 h-[70svh] min-h-[460px] animate-pulse bg-panel-2 sm:-mt-28 sm:h-[min(85vh,760px)] sm:min-h-[520px] short:h-[88svh] short:min-h-0" />
+        <div className="space-y-10 px-4 pt-8 pb-6 sm:px-6 sm:pt-10 lg:px-10">
+          {SKELETON_ROWS.map((title) => (
+            <ShowRowSkeleton key={title} title={title} />
+          ))}
+        </div>
       </div>
     )
   }
 
   const rows = data.rows.filter((row) => (row.items?.length ?? 0) > 0)
   const hasContinue = continueItems.length > 0
-
-  function scrollToContinue() {
-    if (hasContinue) document.getElementById(CONTINUE_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const featured = data.featured?.length ? data.featured : data.hero ? [data.hero] : []
 
   const refreshButton = (
     <button
@@ -146,9 +147,9 @@ export function Home() {
 
   return (
     <div className="pb-12">
-      {data.hero && <Hero show={data.hero} hasContinue={hasContinue} onContinue={scrollToContinue} />}
+      {featured.length > 0 && <Hero shows={featured} />}
 
-      <div className="space-y-8 px-4 pt-2 sm:px-6 lg:px-10">
+      <div className="space-y-10 px-4 pt-8 sm:px-6 sm:pt-10 lg:px-10">
         {error && (
           <p role="alert" className="text-sm text-red-300">
             {error}
@@ -174,8 +175,10 @@ export function Home() {
               title={row.title}
               items={row.items}
               itemKey={(show) => show.bookId}
-              render={(show) => <ShowCard show={show} />}
-              action={index === 0 && !hasContinue ? refreshButton : undefined}
+              render={(show) => (
+                <ShowCard show={show} badge={row.key === 'trending' && !show.badge ? 'Trending' : undefined} />
+              )}
+              action={index === 0 && !hasContinue && signedIn ? refreshButton : undefined}
               logo={row.key.startsWith('latest-') ? row.source : undefined}
               viewAllHref={rowViewAllHref(row)}
             />

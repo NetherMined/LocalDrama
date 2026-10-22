@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { api, type Config, type Language, type PathValidation, type SettingsPatch } from '../api'
-import { FreePlanSection } from '../components/FreePlanSection'
 import { LanUrlRow } from '../components/LanUrlRow'
 import { SourcesPanel } from '../components/SourcesPanel'
 import { SystemHealth } from '../components/SystemHealth'
@@ -340,8 +339,6 @@ function SettingsPage() {
           {notice && <NoticeText notice={notice} />}
         </div>
       </form>
-
-      <FreePlanSection plan={current.plan} sources={current.sources} onSaved={setConfig} />
 
       <Section id="security" title="Security" description="An admin password requires sign-in before the app or its media can be used.">
         {!pwEditing && (

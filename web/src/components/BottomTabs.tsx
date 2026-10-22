@@ -17,7 +17,7 @@ function useFullscreenActive(): boolean {
 const tabBase =
   'flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[11px] font-medium transition'
 
-export function BottomTabs({ isAdmin, onSearch }: { isAdmin: boolean; onSearch: () => void }) {
+export function BottomTabs({ isAdmin, signedIn, onSearch }: { isAdmin: boolean; signedIn: boolean; onSearch: () => void }) {
   const location = useLocation()
   const fullscreen = useFullscreenActive()
   const { pathname } = location
@@ -35,10 +35,14 @@ export function BottomTabs({ isAdmin, onSearch }: { isAdmin: boolean; onSearch: 
     { label: 'Home', to: '/', icon: <HomeIcon className="h-6 w-6" />, active: pathname === '/' },
     { label: 'Browse', to: '/browse', icon: <GridIcon className="h-6 w-6" />, active: pathname === '/browse' && !popular },
     { label: 'Search', to: '/search', icon: <SearchIcon className="h-6 w-6" />, active: pathname === '/search', onClick: openSearch },
-    { label: 'My List', to: '/favourites', icon: <BookmarkIcon className="h-6 w-6" />, active: pathname === '/favourites' },
-    isAdmin
-      ? { label: 'Downloads', to: '/downloads', icon: <DownloadIcon className="h-6 w-6" />, active: pathname === '/downloads' }
-      : { label: 'Library', to: '/library', icon: <LibraryIcon className="h-6 w-6" />, active: pathname.startsWith('/library') },
+    ...(signedIn
+      ? [
+          { label: 'My List', to: '/favourites', icon: <BookmarkIcon className="h-6 w-6" />, active: pathname === '/favourites' },
+          isAdmin
+            ? { label: 'Downloads', to: '/downloads', icon: <DownloadIcon className="h-6 w-6" />, active: pathname === '/downloads' }
+            : { label: 'Library', to: '/library', icon: <LibraryIcon className="h-6 w-6" />, active: pathname.startsWith('/library') },
+        ]
+      : []),
   ]
 
   return (
@@ -46,7 +50,7 @@ export function BottomTabs({ isAdmin, onSearch }: { isAdmin: boolean; onSearch: 
       aria-label="Main tabs"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden short:hidden"
     >
-      <ul className="grid grid-cols-5">
+      <ul className={`grid ${signedIn ? 'grid-cols-5' : 'grid-cols-3'}`}>
         {tabs.map((tab) => (
           <li key={tab.label}>
             <Link

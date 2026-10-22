@@ -14,19 +14,22 @@ export function Poster({
   name,
   className = '',
   aspect = 'portrait',
+  decorative = false,
 }: {
   src?: string
   name: string
   className?: string
   aspect?: 'card' | 'portrait' | 'landscape'
+  decorative?: boolean
 }) {
   const [failed, setFailed] = useState(false)
   const ratio = aspect === 'landscape' ? 'aspect-video' : aspect === 'card' ? 'aspect-[2/3]' : 'aspect-[3/4]'
   if (!src || failed) {
     return (
       <div
-        role="img"
-        aria-label={name}
+        role={decorative ? undefined : 'img'}
+        aria-hidden={decorative || undefined}
+        aria-label={decorative ? undefined : name}
         className={`flex ${ratio} items-center justify-center bg-gradient-to-br from-panel-2 to-line text-3xl font-bold text-muted ${className}`}
       >
         {name.charAt(0).toUpperCase() || '?'}
@@ -36,7 +39,7 @@ export function Poster({
   return (
     <img
       src={src}
-      alt={name}
+      alt={decorative ? '' : name}
       loading="lazy"
       onError={() => setFailed(true)}
       className={`${ratio} w-full bg-panel-2 object-cover ${aspect === 'landscape' ? 'object-top' : 'object-center'} ${className}`}

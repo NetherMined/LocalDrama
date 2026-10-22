@@ -20,6 +20,7 @@ function newer(a: DownloadItem, b: DownloadItem): boolean {
 export function DownloadsProvider({ children }: { children: ReactNode }) {
   const { status } = useStatus()
   const admin = status?.account?.role === 'admin'
+  const signedIn = !!status?.authenticated
   const [byId, setById] = useState<Map<string, DownloadItem>>(() => new Map())
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +59,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
         return next
       })
     }
-  })
+  }, signedIn)
 
   const value = useMemo<DownloadsValue>(() => {
     const items = [...byId.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))

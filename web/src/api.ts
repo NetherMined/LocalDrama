@@ -10,14 +10,11 @@ export interface UpstreamStatus {
 }
 
 export type AccountRole = 'admin' | 'user'
-export type AccountTier = 'free' | 'vip'
 
 export interface AccountSummary {
   id: number
   username: string
   role: AccountRole
-  tier: AccountTier
-  vipUntil: string | null
   mustChangePassword: boolean
 }
 
@@ -84,6 +81,7 @@ export interface AppStatus {
   defaultCredentials: boolean
   profile: Profile | null
   profileRequired: boolean
+  pendingRequests?: number
 }
 
 export interface Profile {
@@ -149,38 +147,6 @@ export interface ProxyTest {
   error?: string
 }
 
-export interface PlanPrices {
-  series: number
-  seriesMyList: number
-  platform: number
-  episodes: number
-}
-
-export interface DailyWeight {
-  kind: 'points' | 'episodes' | 'series'
-  value: number
-  weight: number
-}
-
-export interface Plan {
-  version: number
-  vipPlatforms: string[]
-  popularShare: number
-  popularMinPlays: number
-  welcomeGiftEveryDays: number
-  dailyRewards: DailyWeight[]
-  streakDays: number
-  streakBonus: number
-  sharePoints: number
-  shareMaxPerDay: number
-  shareJoinBonus: number
-  episodesPerUnlock: number
-  platformUnlockHours: number
-  prices: PlanPrices
-}
-
-export type PlanPatch = Partial<Omit<Plan, 'version' | 'prices'>> & { prices?: Partial<PlanPrices> }
-
 export interface SettingsSource {
   id: string
   name: string
@@ -196,13 +162,11 @@ export interface Config {
   configured: boolean
   hasPassword: boolean
   mdns: boolean
-  plan: Plan
   sources: SettingsSource[]
 }
 
-export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword' | 'plan' | 'sources'>> & {
+export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword' | 'sources'>> & {
   password?: string
-  plan?: PlanPatch
 }
 
 export interface SetupInput {
@@ -213,28 +177,6 @@ export interface SetupInput {
   concurrency?: number
   quality?: number
   password?: string
-}
-
-// free: not VIP content; vip: VIP content this account can't watch yet; unlocked: VIP content it can watch.
-export type AccessLevel = 'free' | 'vip' | 'unlocked'
-
-export interface UnlockOption {
-  kind: 'series' | 'episodes' | 'platform'
-  cost: number
-  fromEp?: number
-  toEp?: number
-  ref?: string
-  hours?: number
-}
-
-// 403 body of /api/shows/:bookId/stream/:index when the episode is locked.
-export interface LockedEpisode {
-  error: 'vip_required'
-  reason: 'platform' | 'popular'
-  bookId: string
-  source: string | null
-  episode: number
-  options: UnlockOption[]
 }
 
 export class ApiError extends Error {
@@ -249,12 +191,6 @@ export class ApiError extends Error {
   }
 }
 
-export function lockedEpisodeOf(err: unknown): LockedEpisode | null {
-  if (!(err instanceof ApiError) || err.status !== 403) return null
-  const body = err.body as Partial<LockedEpisode> | null
-  return body && body.error === 'vip_required' && Array.isArray(body.options) ? (body as LockedEpisode) : null
-}
-
 export interface Show {
   bookId: string
   name: string
@@ -266,7 +202,7 @@ export interface Show {
   status?: string
   source?: string | null
   sourceName?: string | null
-  access?: AccessLevel
+  badge?: 'Hot' | 'New' | null
 }
 
 export interface HomeRow {
@@ -279,6 +215,7 @@ export interface HomeRow {
 
 export interface HomeData {
   hero: Show | null
+  featured: Show[]
   rows: HomeRow[]
   errors: { key: string; error: string }[]
   sources?: { id: string; name: string; type: string; enabled: boolean }[]
@@ -320,7 +257,6 @@ export interface Episode {
   name: string
   downloaded: boolean
   downloadStatus?: DownloadStatus
-  access?: AccessLevel
 }
 
 export interface Page<T> {
@@ -415,9 +351,9 @@ export interface AdminAccount {
   id: number
   username: string
   role: AccountRole
-  tier: AccountTier
-  vipUntil: string | null
   disabled: boolean
+  pending: boolean
+  requestNote: string | null
   mustChangePassword: boolean
   hasPassword: boolean
   createdAt: string
@@ -485,96 +421,6 @@ export interface AdminUserActivity {
   profiles: ActivityProfile[]
 }
 
-export type RewardReason =
-  | 'daily_reward'
-  | 'streak_bonus'
-  | 'share'
-  | 'share_join'
-  | 'shop_series'
-  | 'shop_episodes'
-  | 'shop_platform'
-
-export interface DailyReward {
-  kind: 'points' | 'episodes' | 'series'
-  value: number
-  bookId?: string
-  name?: string
-  source?: string | null
-  fromEp?: number
-  toEp?: number
-}
-
-export interface RewardUnlock {
-  kind: 'series' | 'episodes' | 'platform'
-  ref: string
-  name: string
-  fromEp: number | null
-  toEp: number | null
-  expiresAt: string | null
-  reason: string | null
-}
-
-export interface RewardHistoryItem {
-  id: number
-  delta: number
-  reason: RewardReason | string
-  ref: string | null
-  createdAt: string
-}
-
-export interface RewardsSummary {
-  vip: boolean
-  balance: number
-  streak: number
-  daily: { claimed: boolean; reward: DailyReward | null }
-  shares: { today: number; max: number }
-  gifts: { bookId: string; name: string; source: string | null }[]
-  unlocks: RewardUnlock[]
-  history: RewardHistoryItem[]
-  rules: {
-    prices: PlanPrices
-    sharePoints: number
-    shareJoinBonus: number
-    streakDays: number
-    streakBonus: number
-    episodesPerUnlock: number
-    platformUnlockHours: number
-    vipPlatforms: string[]
-  }
-}
-
-export interface DailyResult {
-  reward: DailyReward
-  streak: number
-  bonus: number
-  balance: number
-}
-
-export interface ShareLink {
-  code: string
-  path: string
-}
-
-export interface ShareCompleteResult {
-  points: number
-  sharesToday: number
-  maxPerDay: number
-  balance: number
-}
-
-export interface ShopInput {
-  kind: 'series' | 'episodes' | 'platform'
-  bookId?: string
-  source?: string
-  fromEp?: number
-}
-
-export interface ShopResult {
-  cost: number
-  unlock: RewardUnlock
-  balance: number
-}
-
 export interface CreatedUser {
   account: AdminAccount
   tempPassword: string
@@ -586,8 +432,18 @@ export type AppEvent =
   | { type: 'library'; bookId: string }
   | { type: 'notification' }
 
+let guestMode = false
+
+export function setGuestMode(on: boolean) {
+  guestMode = on
+}
+
+const GUEST_PAGE = /^\/(show\/.*)?$|^\/(browse|search)$/
+
 function handleUnauthorized() {
-  if (window.location.pathname === '/login') return
+  const path = window.location.pathname
+  if (path === '/login') return
+  if (guestMode && GUEST_PAGE.test(path)) return
   const next = `${window.location.pathname}${window.location.search}`
   window.location.assign(`/login?reason=expired&next=${encodeURIComponent(next)}`)
 }
@@ -817,13 +673,8 @@ export const api = {
 
   health: () => request<Health>('/api/health'),
 
-  getRewards: () => request<RewardsSummary>('/api/rewards'),
-  claimDaily: () => request<DailyResult>('/api/rewards/daily', { method: 'POST' }),
-  createShare: (bookId: string, source?: string) =>
-    request<ShareLink>('/api/rewards/share', { method: 'POST', body: { bookId, source: source ?? null } }),
-  completeShare: (code: string) =>
-    request<ShareCompleteResult>('/api/rewards/share/complete', { method: 'POST', body: { code } }),
-  shopPurchase: (input: ShopInput) => request<ShopResult>('/api/rewards/shop', { method: 'POST', body: input }),
+  requestAccess: (input: { username: string; password: string; note?: string }) =>
+    request<{ ok: true }>('/api/auth/request-access', { method: 'POST', body: input }),
 
   adminUsers: () => request<{ items: AdminUserRow[] }>('/api/admin/users'),
   adminActivity: () => request<{ items: AdminActivitySummary[] }>('/api/admin/activity'),
@@ -832,11 +683,12 @@ export const api = {
     request<CreatedUser>('/api/admin/users', { method: 'POST', body: { username, role } }),
   updateAdminUser: (
     id: number,
-    patch: { role?: AccountRole; disabled?: boolean; tier?: AccountTier; vipUntil?: string | null },
+    patch: { role?: AccountRole; disabled?: boolean },
   ) =>
     request<{ account: AdminAccount }>(`/api/admin/users/${id}`, { method: 'PATCH', body: patch }),
   resetAdminUserPassword: (id: number) =>
     request<{ tempPassword: string }>(`/api/admin/users/${id}/reset-password`, { method: 'POST' }),
+  approveUser: (id: number) => request<{ account: AdminAccount }>(`/api/admin/users/${id}/approve`, { method: 'POST' }),
   deleteAdminUser: (id: number) => request<{ ok: true }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
 }
 
@@ -880,12 +732,13 @@ function closeSourceIfIdle() {
   }
 }
 
-export function useEvents(onEvent: Listener) {
+export function useEvents(onEvent: Listener, enabled = true) {
   const handler = useRef(onEvent)
   useEffect(() => {
     handler.current = onEvent
   })
   useEffect(() => {
+    if (!enabled) return
     const listener: Listener = (event) => handler.current(event)
     listeners.add(listener)
     openSource()
@@ -893,5 +746,5 @@ export function useEvents(onEvent: Listener) {
       listeners.delete(listener)
       closeSourceIfIdle()
     }
-  }, [])
+  }, [enabled])
 }

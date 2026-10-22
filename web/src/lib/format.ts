@@ -88,3 +88,22 @@ export function fmtAgoOrNever(iso: string | null): string {
 export function isGenericEpisodeName(name: string): boolean {
   return !name.trim() || /^(episode|ep|e)[\s.]*\d+$/i.test(name.trim())
 }
+
+export function fmtCount(value: number | string | null | undefined): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!/^\d+(\.\d+)?$/.test(trimmed)) return trimmed || null
+    value = Number(trimmed)
+  }
+  if (!Number.isFinite(value) || value <= 0) return null
+  const units: [number, string][] = [
+    [1e9, 'B'],
+    [1e6, 'M'],
+    [1e3, 'K'],
+  ]
+  for (const [size, suffix] of units) {
+    if (value >= size) return `${(value / size).toFixed(1).replace(/\.0$/, '')}${suffix}`
+  }
+  return String(Math.round(value))
+}

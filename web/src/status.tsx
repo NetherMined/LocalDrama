@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api, type AppStatus } from './api'
+import { api, setGuestMode, type AppStatus } from './api'
 import { errorMessage } from './lib/format'
 
 interface StatusValue {
@@ -36,6 +36,10 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  useEffect(() => {
+    setGuestMode(status !== null && !status.authenticated)
+  }, [status])
 
   useEffect(() => {
     const id = window.setInterval(() => {

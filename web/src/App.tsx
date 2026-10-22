@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
 import { AdminOnly } from './components/AdminOnly'
-import { DailyRewardPrompt } from './components/DailyRewardPrompt'
 import { InstallBanner } from './components/InstallBanner'
 import { Nav } from './components/Nav'
 import { UpstreamBanner } from './components/UpstreamBanner'
 import { ErrorPanel, Spinner, buttonClass } from './components/ui'
 import { DownloadsProvider } from './downloads'
+import { SignInPromptProvider } from './components/SignInPrompt'
 import { safeNext } from './lib/format'
 import { useStatus } from './status'
 import { Account } from './pages/Account'
@@ -20,7 +20,6 @@ import { LibraryShow } from './pages/LibraryShow'
 import { Login } from './pages/Login'
 import { ChangePassword } from './pages/ChangePassword'
 import { Profiles } from './pages/Profiles'
-import { Rewards } from './pages/Rewards'
 import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Setup } from './pages/Setup'
@@ -37,6 +36,11 @@ function NotFound() {
       </Link>
     </div>
   )
+}
+
+// Pages a signed-out visitor can browse. Everything else still needs an account.
+function isGuestPage(pathname: string): boolean {
+  return pathname === '/' || pathname === '/browse' || pathname === '/search' || pathname.startsWith('/show/')
 }
 
 // Where to go after signing in: the login page's own ?next= wins over the page it was opened on.
@@ -68,7 +72,9 @@ export default function App() {
     )
   }
 
-  if (status.authRequired && !status.authenticated) {
+  const guestPage = status.configured && !status.authenticated && isGuestPage(location.pathname)
+
+  if (status.authRequired && !status.authenticated && !guestPage) {
     const next = nextPath(location.pathname, location.search)
     return (
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -99,7 +105,7 @@ export default function App() {
     )
   }
 
-  if (status.profileRequired) {
+  if (status.profileRequired && !guestPage) {
     const next = nextPath(location.pathname, location.search)
     return (
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
@@ -112,67 +118,67 @@ export default function App() {
   }
 
   return (
-    <DownloadsProvider>
-      <Nav />
-      <UpstreamBanner />
-      <main
-        className={
-          location.pathname === '/'
-            ? 'max-sm:pb-[calc(4.5rem+env(safe-area-inset-bottom))] max-sm:short:pb-4'
-            : 'mx-auto max-w-7xl px-4 py-6 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] max-sm:short:pb-6 sm:px-6 sm:py-8'
-        }
-      >
-        <Routes>
-          <Route path="/setup" element={<Setup />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Home />} />
-          <Route path="/browse" element={<Browse />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/show/:bookId" element={<Show />} />
-          <Route
-            path="/downloads"
-            element={
-              <AdminOnly>
-                <Downloads />
-              </AdminOnly>
-            }
-          />
-          <Route path="/library" element={<Library />} />
-          <Route path="/library/:bookId" element={<LibraryShow />} />
-          <Route path="/favourites" element={<Favourites />} />
-          <Route path="/account" element={<Account />} />
-          <Route path="/rewards" element={<Rewards />} />
-          <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
-          <Route path="/profiles" element={<Profiles />} />
-          <Route
-            path="/admin/users"
-            element={
-              <AdminOnly title="Users are managed by admins">
-                <AdminUsers />
-              </AdminOnly>
-            }
-          />
-          <Route
-            path="/admin/users/:id"
-            element={
-              <AdminOnly title="Users are managed by admins">
-                <AdminUserDetail />
-              </AdminOnly>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <AdminOnly title="Settings are managed by your admin">
-                <Settings />
-              </AdminOnly>
-            }
-          />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </main>
-      {!location.pathname.startsWith('/watch/') && <InstallBanner />}
-      {!location.pathname.startsWith('/watch/') && <DailyRewardPrompt />}
-    </DownloadsProvider>
+    <SignInPromptProvider>
+      <DownloadsProvider>
+        <Nav />
+        <UpstreamBanner />
+        <main
+          className={
+            location.pathname === '/'
+              ? 'max-sm:pb-[calc(4.5rem+env(safe-area-inset-bottom))] max-sm:short:pb-4'
+              : 'mx-auto max-w-7xl px-4 py-6 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] max-sm:short:pb-6 sm:px-6 sm:py-8'
+          }
+        >
+          <Routes>
+            <Route path="/setup" element={<Setup />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/browse" element={<Browse />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/show/:bookId" element={<Show />} />
+            <Route
+              path="/downloads"
+              element={
+                <AdminOnly>
+                  <Downloads />
+                </AdminOnly>
+              }
+            />
+            <Route path="/library" element={<Library />} />
+            <Route path="/library/:bookId" element={<LibraryShow />} />
+            <Route path="/favourites" element={<Favourites />} />
+            <Route path="/account" element={<Account />} />
+            <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
+            <Route path="/profiles" element={<Profiles />} />
+            <Route
+              path="/admin/users"
+              element={
+                <AdminOnly title="Users are managed by admins">
+                  <AdminUsers />
+                </AdminOnly>
+              }
+            />
+            <Route
+              path="/admin/users/:id"
+              element={
+                <AdminOnly title="Users are managed by admins">
+                  <AdminUserDetail />
+                </AdminOnly>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <AdminOnly title="Settings are managed by your admin">
+                  <Settings />
+                </AdminOnly>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </main>
+        {!location.pathname.startsWith('/watch/') && <InstallBanner />}
+      </DownloadsProvider>
+    </SignInPromptProvider>
   )
 }

@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 import { PlatformLogo } from './PlatformLogo'
 
-const itemClass = 'w-[34vw] max-w-[160px] shrink-0 snap-start sm:w-[160px] sm:max-w-none lg:w-[180px]'
+// Room under the cards for the hover panel. The list has matching negative margin, so the row keeps its height.
+const itemClass = 'w-[42vw] max-w-[200px] shrink-0 snap-start sm:w-[220px] sm:max-w-none lg:w-[260px]'
 
 const arrowClass =
-  'absolute inset-y-0 z-10 hidden w-12 items-center justify-center text-white opacity-0 transition duration-200 group-hover/row:opacity-100 focus-visible:opacity-100 md:flex'
+  'absolute top-[calc(50%-1.75rem)] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/80 text-white shadow-lg shadow-black/60 transition hover:bg-black focus-visible:bg-black md:flex'
 
 export function ShowRow<T>({
   id,
@@ -58,7 +59,7 @@ export function ShowRow<T>({
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           {logo && <PlatformLogo id={logo} size={24} decorative />}
-          <h2 id={headingId} className="truncate text-lg font-bold tracking-tight text-white sm:text-xl">
+          <h2 id={headingId} className="truncate text-xl font-bold tracking-tight text-white sm:text-2xl">
             {title}
           </h2>
         </div>
@@ -80,10 +81,10 @@ export function ShowRow<T>({
         <ul
           ref={scroller}
           onScroll={updateEdges}
-          className="no-scrollbar flex snap-x snap-mandatory list-none gap-3 overflow-x-auto scroll-smooth py-1"
+          className="no-scrollbar pointer-events-none -mx-2 -mb-40 flex snap-x snap-mandatory list-none gap-4 overflow-x-auto scroll-smooth scroll-px-2 px-2 pt-1 pb-40 sm:gap-5"
         >
           {items.map((item) => (
-            <li key={itemKey(item)} className={itemClass}>
+            <li key={itemKey(item)} className={`${itemClass} pointer-events-auto`}>
               {render(item)}
             </li>
           ))}
@@ -93,9 +94,9 @@ export function ShowRow<T>({
             type="button"
             onClick={() => scrollBy(-1)}
             aria-label={`Scroll ${title} left`}
-            className={`${arrowClass} left-0 bg-gradient-to-r from-black/80 to-transparent`}
+            className={`${arrowClass} left-2`}
           >
-            <ChevronLeftIcon className="h-9 w-9" />
+            <ChevronLeftIcon className="h-6 w-6" />
           </button>
         )}
         {canRight && (
@@ -103,9 +104,9 @@ export function ShowRow<T>({
             type="button"
             onClick={() => scrollBy(1)}
             aria-label={`Scroll ${title} right`}
-            className={`${arrowClass} right-0 bg-gradient-to-l from-black/80 to-transparent`}
+            className={`${arrowClass} right-2`}
           >
-            <ChevronRightIcon className="h-9 w-9" />
+            <ChevronRightIcon className="h-6 w-6" />
           </button>
         )}
       </div>
@@ -116,11 +117,11 @@ export function ShowRow<T>({
 export function ShowRowSkeleton({ title }: { title: string }) {
   return (
     <section className="space-y-3" aria-busy="true" aria-label={`Loading ${title}`}>
-      <div className="h-6 w-40 animate-pulse rounded bg-panel-2" />
-      <ul className="flex list-none gap-3 overflow-hidden py-1">
+      <div className="h-7 w-40 animate-pulse rounded bg-panel-2" />
+      <ul className="-mb-40 flex list-none gap-4 overflow-hidden pt-1 pb-40 sm:gap-5">
         {Array.from({ length: 5 }, (_, i) => (
           <li key={i} className={`${itemClass} animate-pulse`}>
-            <div className="aspect-[2/3] rounded-md bg-panel-2" />
+            <div className="aspect-[3/4] rounded-xl bg-panel-2" />
             <div className="mt-2 h-3 w-3/4 rounded bg-panel-2" />
           </li>
         ))}

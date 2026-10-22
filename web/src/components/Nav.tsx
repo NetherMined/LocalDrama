@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { isVipAccount } from '../lib/access'
 import { useStatus } from '../status'
 import { useInstall } from '../install'
+import { resetFavourites } from '../lib/favourites'
 import { BottomTabs } from './BottomTabs'
 import { InstallDialog } from './InstallDialog'
-import { UserIcon } from './icons'
+import { HistoryIcon, UserIcon, SearchIcon } from './icons'
 import { NotificationsBell } from './NotificationsBell'
 import { ProfileAvatar } from './ProfileAvatar'
-import { SearchBox } from './SearchBox'
 import { SearchSheet } from './SearchSheet'
-import { SearchIcon } from './icons'
+import { buttonClass } from './ui'
 
 const menuItemClass =
   'flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-white/90 transition hover:bg-panel-2 hover:text-white focus-visible:bg-panel-2'
@@ -27,16 +26,22 @@ export function Nav() {
   const navigate = useNavigate()
   const location = useLocation()
   const isAdmin = status?.account?.role === 'admin'
+  const signedIn = !!status?.authenticated
+  const pendingRequests = status?.pendingRequests ?? 0
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [installOpen, setInstallOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [balance, setBalance] = useState<number | null>(null)
-  const isVip = isVipAccount(status?.account)
   const { installed } = useInstall()
   const menuRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
+  const overHero = location.pathname === '/' && !scrolled
+  const profileId = status?.profile?.id
+
+  useEffect(() => {
+    resetFavourites(signedIn)
+  }, [profileId, status?.account?.id, signedIn])
 
   useEffect(() => {
     function onScroll() {
@@ -46,20 +51,6 @@ export function Nav() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-
-  useEffect(() => {
-    if (!menuOpen || isVip) return
-    let cancelled = false
-    api
-      .getRewards()
-      .then((res) => {
-        if (!cancelled) setBalance(res.balance)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [menuOpen, isVip])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -82,6 +73,7 @@ export function Nav() {
 
   async function switchProfile() {
     setMenuOpen(false)
+    resetFavourites(false)
     try {
       await api.signoutProfile()
     } catch {
@@ -94,6 +86,7 @@ export function Nav() {
   async function logout() {
     setMenuOpen(false)
     setLoggingOut(true)
+    resetFavourites(false)
     try {
       await api.logout()
     } catch {
@@ -103,24 +96,26 @@ export function Nav() {
     navigate('/login?reason=signed_out', { replace: true })
   }
 
-  const popular = location.pathname === '/browse' && new URLSearchParams(location.search).get('sort') === 'popular'
   const links: NavLinkItem[] = [
     { label: 'Home', to: '/', active: location.pathname === '/' },
-    { label: 'Browse', to: '/browse', active: location.pathname === '/browse' && !popular },
-    { label: 'New & Popular', to: '/browse?sort=popular', active: popular },
-    { label: 'My List', to: '/favourites', active: location.pathname === '/favourites' },
-    { label: 'Library', to: '/library', active: location.pathname.startsWith('/library') },
-    { label: 'Downloads', to: '/downloads', active: location.pathname === '/downloads' },
+    { label: 'Categories', to: '/browse', active: location.pathname.startsWith('/browse') },
+    ...(signedIn
+      ? [
+          { label: 'My List', to: '/favourites', active: location.pathname.startsWith('/favourites') },
+          { label: 'Downloads', to: '/downloads', active: location.pathname.startsWith('/downloads') },
+        ]
+      : []),
   ]
+  const signInHref = `/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`
 
   return (
     <>
     <header
       className={`sticky top-0 z-40 transition-colors duration-300 ${
-        scrolled ? 'bg-black/95 backdrop-blur' : 'bg-gradient-to-b from-black/90 to-black/0'
+        overHero ? 'bg-gradient-to-b from-black/80 via-black/40 to-transparent' : 'bg-ink/95 backdrop-blur'
       }`}
     >
-      <div className="flex items-center gap-3 px-4 pt-3 short:pt-2 sm:gap-4 sm:px-6 lg:px-10">
+      <div className="flex h-16 items-center gap-3 px-4 short:h-12 sm:gap-4 sm:px-6 lg:px-10">
         <Link to="/" className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded">
           <svg className="h-7 w-7" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <defs>
@@ -140,19 +135,34 @@ export function Nav() {
             MOCK MODE
           </span>
         )}
-        <div className="hidden min-w-0 flex-1 justify-center sm:flex">
-          <SearchBox />
-        </div>
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
           aria-label="Search dramas"
-          className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10 sm:hidden"
+          title="Search"
+          className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10"
         >
           <SearchIcon className="h-5 w-5" />
         </button>
-        <NotificationsBell />
-        <div ref={menuRef} className="relative shrink-0">
+        {!signedIn && (
+          <Link to={signInHref} className={`${buttonClass('primary')} h-10 shrink-0 px-3 sm:px-5`}>
+            Sign in
+          </Link>
+        )}
+        {signedIn && (
+          <>
+            <Link
+              to="/library"
+              aria-label="Watch history"
+              title="History"
+              className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10 sm:inline-flex"
+            >
+              <HistoryIcon className="h-5 w-5" />
+            </Link>
+            <NotificationsBell />
+          </>
+        )}
+        {signedIn && <div ref={menuRef} className="relative shrink-0">
           <button
             ref={avatarRef}
             type="button"
@@ -185,9 +195,6 @@ export function Nav() {
               <button type="button" role="menuitem" onClick={() => void switchProfile()} className={menuItemClass}>
                 Switch profile
               </button>
-              <Link to="/rewards" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
-                {isVip ? 'Rewards' : `Rewards · ${balance ?? '…'} pts`}
-              </Link>
               <Link to="/account" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
                 Account
               </Link>
@@ -205,8 +212,16 @@ export function Nav() {
                 </button>
               )}
               {isAdmin && (
-                <Link to="/admin/users" role="menuitem" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+                <Link to="/admin/users" role="menuitem" onClick={() => setMenuOpen(false)} className={`${menuItemClass} justify-between`}>
                   Users
+                  {pendingRequests > 0 && (
+                    <span
+                      aria-label={`${pendingRequests} pending access requests`}
+                      className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-white"
+                    >
+                      {pendingRequests}
+                    </span>
+                  )}
                 </Link>
               )}
               {isAdmin && (
@@ -227,11 +242,11 @@ export function Nav() {
               )}
             </div>
           )}
-        </div>
+        </div>}
       </div>
       <nav
         aria-label="Main"
-        className="no-scrollbar hidden items-center gap-5 overflow-x-auto px-4 pt-2 pb-3 text-sm short:gap-4 short:pt-1 short:pb-1.5 short:text-xs sm:flex sm:px-6 lg:px-10"
+        className="no-scrollbar hidden h-12 items-center gap-6 overflow-x-auto px-4 text-sm font-bold short:h-9 short:text-xs sm:flex sm:px-6 lg:px-10"
       >
         {links.filter((item) => isAdmin || item.to !== '/downloads').map((item) => (
           <Link
@@ -239,7 +254,7 @@ export function Nav() {
             to={item.to}
             aria-current={item.active ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap transition ${
-              item.active ? 'font-semibold text-white' : 'text-white/70 hover:text-white'
+              item.active ? 'text-accent-text' : 'text-white hover:text-white/75'
             }`}
           >
             {item.label}
@@ -249,7 +264,7 @@ export function Nav() {
     </header>
       {installOpen && <InstallDialog onClose={() => setInstallOpen(false)} />}
       {searchOpen && <SearchSheet onClose={() => setSearchOpen(false)} />}
-      <BottomTabs isAdmin={isAdmin} onSearch={() => setSearchOpen(true)} />
+      <BottomTabs isAdmin={isAdmin} signedIn={signedIn} onSearch={() => setSearchOpen(true)} />
     </>
   )
 }

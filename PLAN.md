@@ -702,3 +702,129 @@ Server API is in "Phase 4 API" above. Web only; Dramora theme tokens (no hard-co
 and a VIP account at 375 px and desktop.
 
 Each phase stops for confirmation before the next.
+
+# Ticket: Drop tiers & rewards, request-access sign-in, ReelShort-style home (2026-10-22)
+
+## Decisions
+- Only two roles: **Admin** and **User**. Free/VIP tiers, entitlements (locks/unlocks), points, daily rewards,
+  sharing-for-points and the shop are removed completely. Every signed-in account watches everything.
+- Sign-in page gets **Request access**. The visitor picks a username and password and can add a note. This creates
+  a *pending* account that can't sign in. Every admin gets a notification and approves (activates) or rejects
+  (deletes) it.
+- Home is redesigned to match the ReelShort reference screenshots: a hero slider and new rows/cards.
+- The uncommitted red palette in `index.css` stays, because it matches the reference. The uncommitted nav "Rewards"
+  button and `accent` button variant are removed. The "Fandom"/"Brand" placeholder links (`to: '#'`) are replaced
+  by real links.
+
+## Phase 1: Server: remove tiers/rewards, add access requests, featured slider data
+1. Delete `rewards.js`, `routes/rewards.js`, and the stream-token code that stays: move `streamToken` /
+   `checkStreamToken` out of `entitlements.js` into a new `streamTokens.js` (hls.js still needs them), then delete
+   `entitlements.js`. Remove every `entitlements.*` / `rewards.*` call. Remove `annotate`/`access` from the
+   browse, home and stream responses and the `lockFor` 403 `vip_required` in the stream route. Remove the share cookie
+   handling in the login route and `grantDueGifts`.
+2. `config.js`: remove `plan` (its defaults, merge and settings patch). A stored `plan` key is ignored and dropped
+   on the next save.
+3. `db.js`: drop the tables `unlocks`, `points_ledger`, `daily_rewards`, `share_links`, `share_opens`
+   (`DROP TABLE IF EXISTS` on start). Remove the tier/vipUntil migration and stop reading/writing those columns.
+   SQLite keeps the columns, unused. `auth.toAccount` stops returning `tier`/`vipUntil`. `accounts.js` loses
+   `setTier`/`setVipUntil`. The admin PATCH stops accepting them.
+4. Access requests: add the columns `accounts.pending INTEGER NOT NULL DEFAULT 0` and `accounts.requestNote TEXT`.
+   - `POST /api/auth/request-access { username, password, note? }`: public. It is rate limited by IP (3 per hour),
+     validates with `parseUsername`/new-password rules, and gives a 409 if the username is taken. It creates the account
+     with `role=user, pending=1, disabled=1, mustChangePassword=0` and notifies every enabled admin (kind
+     `access_request`, link `/admin/users/:id`). The reply is `{ ok: true }`.
+   - Login of a pending account returns 403 with "Your access request is waiting for an admin to approve it". The
+     password is checked first, so the message only reaches the person who made the request.
+   - `POST /api/admin/users/:id/approve`: sets pending=0, disabled=0 and notifies the user (seen on first sign-in).
+     Reject = the existing `DELETE /api/admin/users/:id`.
+   - The admin users list includes `pending` and `requestNote`. `/api/status` adds `pendingRequests` for admins.
+5. `/api/home` adds `featured`: the 5 shows with the most views among all platforms' latest lists (deduped,
+   cover required, introduction preferred). `hero` stays for compatibility, equal to `featured[0]`. Rows gain an optional
+   `badge` per item: "Hot" for the top 10 by play count, "New" for the 2 newest of each platform's latest list.
+**Verify:** server starts on a copy of the existing DB. `grep -ri "vip\|reward\|entitle\|tier" server/src` is clean.
+Use curl for: request-access → pending login 403 → approve → login OK; `/api/home` has 5 `featured`.
+
+## Phase 2: Web: remove the tier/rewards UI, request-access flow
+1. Delete `Rewards.tsx`, `DailyRewardPrompt`, `LockedDialog`, `FreePlanSection`, `TierBadge`, `TierControls`,
+   `lib/rewards.ts`, `lib/access.ts` and their routes/imports (App, Nav avatar menu, ShowCard locks, Show page
+   locks/follow gating, Settings "Free plan", Users tier badges, user detail tier controls). Remove the matching types and
+   calls in `api.ts`. "Follow" on the series page shows for everyone.
+2. Login page: a secondary **Request access** button under Sign in. It opens a dialog (existing `Modal`) with
+   username, password, confirm password and an optional note ("Who are you?"). On success it shows "Request sent. You can
+   sign in once an admin approves it." and closes. A 403 pending error on sign-in shows as a calm info message, not red.
+3. Admin: the Users page gets a **Pending requests** section at the top (username, note, requested date,
+   Approve / Reject with confirm). The user detail page shows the same actions for a pending user. The Nav admin menu
+   "Users" entry shows a count badge when `pendingRequests > 0`.
+**Verify:** `npx tsc --noEmit` and `npm run build` are clean. In the browser: request → admin notification → approve →
+sign in.
+
+## Phase 3: Web: ReelShort-style home
+1. **Header** (Nav): logo left, then Home / Categories (`/browse`) / My List (`/favourites`) / Downloads.
+   Right side: search icon, history (`/library`), notifications, avatar. The header is transparent over the hero
+   and turns solid on scroll. The active link uses the accent colour. The mobile bottom tabs stay.
+2. **Hero slider** (`Hero.tsx` rewritten, uses `featured`): a full-bleed backdrop (cover, object-cover, left
+   and bottom gradients). On the left: big title (2 lines max), a tag pill row ("Hot" in accent, then the first tag
+   in grey), a 2-line synopsis and a large white rounded-full **Play** button. Bottom right: 5 thumbnail posters,
+   with the active one outlined in white, and a chevron for next. Clicking a thumbnail selects it. It auto-advances every 6 s and pauses
+   on hover/focus and with reduced motion. Crossfade between slides. Keyboard: the thumbnails are buttons. On mobile the
+   thumbnails become dots under the Play button and you swipe to change slides.
+3. **Rows** (`ShowRow`): bold title (text-2xl) with "View all ›" right-aligned in muted text. Wider cards
+   (~260 px desktop, ~42vw phone) with the 3:4 poster at rounded-xl. A round chevron button sits on the right edge
+   (always visible on desktop when it can scroll).
+4. **Card** (`ShowCard`): poster with a badge pill top-left (Hot/New/Trending, accent or red) and "▶ 1.2M" play
+   count bottom-right on a dark gradient. Below the poster: the title (1 line, 2 on hover), then a muted meta line
+   "Tag | Series | Tag2". **Hover (desktop, pointer:fine):** the card lifts into a panel (scale ~1.05, rounded-2xl,
+   bg panel-2, ring) that adds the 2-line synopsis and a row with a white **Play** pill, a **bookmark** (adds to/removes
+   from My List, filled when listed) and a **share** button (native share or copy the link + toast). The expanded panel
+   overlays the next row (absolute, z-index) and doesn't reflow the row. Touch devices skip the hover panel and tap
+   opens the series. The platform logo moves to a tiny corner mark.
+5. The Currently Watching row keeps its progress bar on the new card.
+**Verify:** `tsc` + `build`. Browser check at 1440 px, 1024 px and 375 px against both screenshots. Check keyboard focus on the
+slider and cards. Rebuild the Docker container.
+
+Each phase stops for confirmation before the next.
+
+# Ticket: Guest browsing, sign-in prompt on Play, back to the purple palette (2026-10-22)
+
+## Decisions
+- Anyone who can reach the site can browse: Home, Categories (Browse), Search and series pages. Watching and
+  anything personal still needs an account.
+- For a guest, every Play action (hero Play, the card hover Play, series page Play and episode tiles) and every personal action
+  (My List bookmark, Follow, Like) opens a **Sign in to watch** popup. It offers **Sign in**, which goes to
+  `/login?next=<current page>`, and **Request access**, which opens the existing request dialog in place.
+- Colours go back to the purple/blue Dramora palette. The red ReelShort palette from the last ticket is reverted, but the
+  layout stays.
+- The Admin password was reset to the one the user asked for (done 2026-10-22, outside the phases).
+
+## Phase 1: Server: public read-only browsing
+1. In `index.js`, add a guest-readable set of GET routes: `/api/home`, `/api/browse/latest`,
+   `/api/browse/categories`, `/api/browse/sources`, `/api/search`, `/api/search/suggest`, `/api/shows/:bookId`
+   (the show details only, not `/stream`, `/social` or anything below them). For these, attach the account when there is a
+   session and never send a 401. Other routes are unchanged (streams, HLS, media, watch, progress, favourites, account,
+   admin).
+2. A guest's `/api/home` doesn't get `errors` (upstream error text is for signed-in users).
+3. `/api/status` for a guest still says `authenticated:false`. Add `guestBrowsing: true` so the web knows.
+**Verify:** curl without a cookie: the public routes return 200. Stream, watch, favourites and admin routes return 401.
+Signed-in behaviour is unchanged.
+
+## Phase 2: Web: guest mode, sign-in popup, purple palette
+1. `index.css`: restore the palette from before the last ticket (ink #0A0A0F, panel #16161F, panel-2 #1E1E2A,
+   line #2A2A38, accent #7C3AED, accent-hi #C026D3, accent-soft #A78BFA, accent-text #E879F9). Replace any hard-coded
+   red classes added since with tokens.
+2. `App.tsx`: when signed out, routes `/`, `/browse`, `/search` and `/show/:bookId` render inside the normal layout.
+   Every other route redirects to `/login?next=…`, as today.
+3. Nav for guests: Home / Categories links and search. On the right, a **Sign in** button replaces the
+   history, notifications and avatar. The mobile bottom tabs show only Home / Browse / Search.
+4. Add a `SignInPrompt` modal and a `useRequireAccount()` helper. It returns a guard that runs the action when signed in,
+   or opens the popup when not. The popup has a title "Sign in to watch", a line naming the series, a **Sign in**
+   button and a **Request access** button that opens `RequestAccessDialog`. Use it for: hero Play, the card hover Play and
+   bookmark, the series page Play, episode tiles, Follow, Like and Save. Share stays open to everyone.
+5. Make no per-account calls for guests: Continue Watching, the favourites store, notifications, the social and watch
+   endpoints on the series page, and the "add to library"/download admin bits. Nothing may hit `handleUnauthorized()`
+   while browsing as a guest, because that would bounce the guest to the login page.
+6. Login page: keep `next`, so signing in from the popup returns to the same series.
+**Verify:** `tsc` + `build`. Browser as a guest at 1440 and 375 px: home, browse, search and series pages load. Play,
+an episode tile and the bookmark each open the popup. Sign in returns to the series and plays. Request access works
+from the popup. No 401 redirects in the network log. Rebuild the container.
+
+Each phase stops for confirmation before the next.

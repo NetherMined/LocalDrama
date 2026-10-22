@@ -1,11 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { api } from '../api'
+import { api, ApiError } from '../api'
+import { RequestAccessDialog } from '../components/RequestAccessDialog'
+import { buttonClass } from '../components/ui'
 import { errorMessage, safeNext } from '../lib/format'
 import { useStatus } from '../status'
 
 const inputClass =
   'mt-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-accent-hi'
+
+const PENDING_MESSAGE = 'Your access request is waiting for an admin to approve it'
 
 const REASON_TEXT: Record<string, string> = {
   expired: 'Session expired. Sign in again to continue.',
@@ -24,6 +28,9 @@ export function Login() {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+  const [requestOpen, setRequestOpen] = useState(false)
+  const requestRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (status?.authenticated) navigate(next, { replace: true })
@@ -32,6 +39,7 @@ export function Login() {
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setPending(false)
     if (!username.trim() || !password) return
     setSubmitting(true)
     try {
@@ -39,7 +47,8 @@ export function Login() {
       const fresh = await reload()
       navigate(fresh?.profileRequired ? `/profiles?next=${encodeURIComponent(next)}` : next, { replace: true })
     } catch (err) {
-      setError(errorMessage(err))
+      if (err instanceof ApiError && err.status === 403 && err.message === PENDING_MESSAGE) setPending(true)
+      else setError(errorMessage(err))
       setSubmitting(false)
     }
   }
@@ -63,7 +72,13 @@ export function Login() {
           </p>
         )}
 
-        {reasonText && !error && (
+        {pending && (
+          <p role="status" className="rounded-md border border-line bg-white/5 px-3 py-2 text-sm text-white/90">
+            {PENDING_MESSAGE}. You can sign in once it is approved.
+          </p>
+        )}
+
+        {reasonText && !error && !pending && (
           <p role="status" className="rounded-md bg-white/10 px-3 py-2 text-sm text-white/90">
             {reasonText}
           </p>
@@ -113,10 +128,18 @@ export function Login() {
           {submitting ? 'Please wait…' : 'Sign in'}
         </button>
 
-        <p className="text-center text-xs text-zinc-500">
-          Use the username and password your admin gave you. Ask an admin if you do not have an account.
-        </p>
+        <button
+          ref={requestRef}
+          type="button"
+          onClick={() => setRequestOpen(true)}
+          className={`${buttonClass('ghost')} w-full`}
+        >
+          Request access
+        </button>
+
+        <p className="text-center text-xs text-zinc-500">No account? Request access and an admin will approve it.</p>
       </form>
+      {requestOpen && <RequestAccessDialog onClose={() => setRequestOpen(false)} returnFocusRef={requestRef} />}
     </div>
   )
 }
