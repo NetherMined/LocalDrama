@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { detectPlatform } from '../install'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 import { PlatformLogo } from './PlatformLogo'
 
-// Room under the cards for the hover panel. The list has matching negative margin, so the row keeps its height.
 const itemClass = 'w-[42vw] max-w-[200px] shrink-0 snap-start sm:w-[220px] sm:max-w-none lg:w-[260px]'
 
 const arrowClass =
-  'absolute top-[calc(50%-1.75rem)] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/80 text-white shadow-lg shadow-black/60 transition hover:bg-black focus-visible:bg-black md:flex'
+  'absolute top-[calc(50%-1.25rem)] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/80 text-white shadow-lg shadow-black/60 transition hover:bg-black focus-visible:bg-black md:flex'
 
 export function ShowRow<T>({
   id,
@@ -32,6 +32,7 @@ export function ShowRow<T>({
 }) {
   const headingId = useId()
   const scroller = useRef<HTMLUListElement>(null)
+  const tv = detectPlatform() === 'tv'
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
 
@@ -81,10 +82,10 @@ export function ShowRow<T>({
         <ul
           ref={scroller}
           onScroll={updateEdges}
-          className="no-scrollbar pointer-events-none -mx-2 -mb-40 flex snap-x snap-mandatory list-none gap-4 overflow-x-auto scroll-smooth scroll-px-2 px-2 pt-1 pb-40 sm:gap-5"
+          className="no-scrollbar -mx-2 flex snap-x snap-mandatory list-none gap-4 overflow-x-auto scroll-smooth scroll-px-2 px-2 pt-3 pb-3 sm:gap-5"
         >
           {items.map((item) => (
-            <li key={itemKey(item)} className={`${itemClass} pointer-events-auto`}>
+            <li key={itemKey(item)} className={itemClass}>
               {render(item)}
             </li>
           ))}
@@ -92,6 +93,7 @@ export function ShowRow<T>({
         {canLeft && (
           <button
             type="button"
+            tabIndex={tv ? -1 : undefined}
             onClick={() => scrollBy(-1)}
             aria-label={`Scroll ${title} left`}
             className={`${arrowClass} left-2`}
@@ -102,6 +104,7 @@ export function ShowRow<T>({
         {canRight && (
           <button
             type="button"
+            tabIndex={tv ? -1 : undefined}
             onClick={() => scrollBy(1)}
             aria-label={`Scroll ${title} right`}
             className={`${arrowClass} right-2`}
@@ -118,7 +121,7 @@ export function ShowRowSkeleton({ title }: { title: string }) {
   return (
     <section className="space-y-3" aria-busy="true" aria-label={`Loading ${title}`}>
       <div className="h-7 w-40 animate-pulse rounded bg-panel-2" />
-      <ul className="-mb-40 flex list-none gap-4 overflow-hidden pt-1 pb-40 sm:gap-5">
+      <ul className="flex list-none gap-4 overflow-hidden pt-3 pb-3 sm:gap-5">
         {Array.from({ length: 5 }, (_, i) => (
           <li key={i} className={`${itemClass} animate-pulse`}>
             <div className="aspect-[3/4] rounded-xl bg-panel-2" />

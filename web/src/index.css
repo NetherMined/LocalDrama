@@ -32,8 +32,13 @@
   }
 
   :focus-visible {
-    outline: 3px solid var(--color-accent-hi);
-    outline-offset: 3px;
+    outline: 2px solid rgb(255 255 255 / 0.9);
+    outline-offset: 2px;
+  }
+
+  html.tv :focus-visible {
+    outline: 3px solid rgb(255 255 255 / 0.95);
+    outline-offset: 4px;
   }
 
   input:focus-visible,
