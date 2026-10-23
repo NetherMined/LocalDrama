@@ -6,13 +6,6 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(REPO_ROOT, 'data'));
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
-export function defaultIntegrations() {
-  return {
-    jellyfin: { enabled: false, url: '', apiKey: '' },
-    plex: { enabled: false, url: '', token: '', sectionId: '' },
-  };
-}
-
 const GOODBOS_PLATFORMS = [
   { id: 'dramabox', name: 'DramaBox', base: 'https://dramabox.goodbos.online' },
   { id: 'reelshort', name: 'ReelShort', base: 'https://reelshort.goodbos.online' },
@@ -78,25 +71,15 @@ export function isKeyOnly(source) {
 }
 
 export const DEFAULT_CONFIG = {
-  downloadRoot: '',
   language: 'en',
   requestDelay: 2000,
-  concurrency: 1,
   quality: 720,
   proxyUrl: '',
   passwordHash: '',
   configured: false,
-  mdns: true,
   activeSourceId: 'dramabox',
   sources: defaultSources(),
-  integrations: defaultIntegrations(),
 };
-
-function mergeIntegrations(stored) {
-  const merged = defaultIntegrations();
-  for (const key of Object.keys(merged)) Object.assign(merged[key], stored?.[key] ?? {});
-  return merged;
-}
 
 function mergeSources(stored) {
   const defaults = defaultSources();
@@ -138,10 +121,11 @@ export function loadConfig() {
   }
   // The free/VIP plan was removed; a stored plan is dropped on the next save.
   delete stored.plan;
+  // Downloads, the Library, mDNS and integrations were removed; their stored settings are dropped on the next save.
+  for (const key of ['downloadRoot', 'concurrency', 'mdns', 'integrations']) delete stored[key];
   fileConfig = {
     ...DEFAULT_CONFIG,
     ...stored,
-    integrations: mergeIntegrations(stored.integrations),
     sources: mergeSources(stored.sources),
   };
   current = applyEnv(fileConfig);

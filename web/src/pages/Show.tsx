@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, useEvents, type DownloadStatus, type Episode, type ShowDetail, type ShowSocial, type StreamProgress } from '../api'
-import { useDownloads } from '../downloads'
+import { api, type Episode, type ShowDetail, type ShowSocial, type StreamProgress } from '../api'
 import { useStatus } from '../status'
 import { PlayerShell, type PlayerEpisode, type PlayerHandle, type PlayerSample, type ResolvedSource } from '../components/PlayerShell'
-import { StatusPill } from '../components/StatusPill'
-import { BellIcon, CheckIcon, ChevronRightIcon, HeartIcon, MoreVerticalIcon, PlayIcon, PlusIcon, ShareIcon } from '../components/icons'
+import { BellIcon, CheckIcon, ChevronRightIcon, HeartIcon, PlayIcon, PlusIcon, ShareIcon } from '../components/icons'
 import { PlatformLogo } from '../components/PlatformLogo'
 import { Modal } from '../components/Modal'
 import { useRequireAccount } from '../components/SignInPrompt'
@@ -15,15 +13,6 @@ import { errorMessage, isGenericEpisodeName } from '../lib/format'
 import { setFavourite, useFavourites } from '../lib/favourites'
 import { shareLink } from '../lib/share'
 
-type Display = 'none' | DownloadStatus | 'downloaded'
-
-interface DisplayInfo {
-  state: Display
-  bytesDone?: number
-  bytesTotal?: number
-  id?: number | string
-}
-
 const RESUME_MIN_SECONDS = 5
 const RANGE_SIZE = 50
 
@@ -31,18 +20,12 @@ export function Show() {
   const { bookId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const source = searchParams.get('source') || undefined
-  const { byEpisode } = useDownloads()
   const status = useStatus().status
-  const account = status?.account ?? null
   const signedIn = !!status?.authenticated
-  const isAdmin = account?.role === 'admin'
   const requireAccount = useRequireAccount()
   const [detail, setDetail] = useState<ShowDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [libraryIds, setLibraryIds] = useState<Map<number, number | string>>(() => new Map())
-  const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const favourites = useFavourites(signedIn)
   const isFav = favourites.has(bookId)
@@ -55,7 +38,6 @@ export function Show() {
   const [playing, setPlaying] = useState(false)
   const [rangeStart, setRangeStart] = useState<number | null>(null)
   const [allOpen, setAllOpen] = useState(false)
-  const [moreOpen, setMoreOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [toast, notify] = useToast()
   const playerRef = useRef<PlayerHandle>(null)
@@ -65,25 +47,16 @@ export function Show() {
   const currentBook = useRef(bookId)
   currentBook.current = bookId
 
-  const loadLibrary = useCallback(() => {
-    api
-      .libraryShow(bookId)
-      .then((res) => setLibraryIds(new Map(res.episodes.map((e) => [e.episodeIndex, e.id]))))
-      .catch(() => setLibraryIds(new Map()))
-  }, [bookId])
-
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    setNotice(null)
     setProgressByEp(new Map())
     setProgressReady(false)
     setCurrentKey(null)
     setPlaying(false)
     setRangeStart(null)
     setAllOpen(false)
-    setMoreOpen(false)
     setExpanded(false)
     setSocial(null)
     if (signedIn) {
@@ -104,7 +77,6 @@ export function Show() {
       .then((res) => {
         if (cancelled) return
         setDetail(res)
-        if (signedIn && res.episodes.some((ep) => ep.downloaded)) loadLibrary()
       })
       .catch((err) => {
         if (!cancelled) setError(errorMessage(err))
@@ -116,45 +88,9 @@ export function Show() {
     return () => {
       cancelled = true
     }
-  }, [bookId, source, attempt, loadLibrary, signedIn])
-
-  useEvents((event) => {
-    if (event.type === 'library' && event.bookId === bookId) loadLibrary()
-  }, signedIn)
-
-  function displayOf(ep: Episode): DisplayInfo {
-    const live = byEpisode(bookId, ep.index)
-    if (libraryIds.has(ep.index) || live?.status === 'completed') {
-      return { state: 'downloaded', id: libraryIds.get(ep.index) }
-    }
-    if (live) {
-      return { state: live.status, bytesDone: live.bytesDone, bytesTotal: live.bytesTotal }
-    }
-    if (ep.downloaded) return { state: 'downloaded', id: libraryIds.get(ep.index) }
-    return { state: 'none' }
-  }
+  }, [bookId, source, attempt, signedIn])
 
   const episodes = detail?.episodes ?? []
-  const selectable = episodes.filter((ep) => {
-    const s = displayOf(ep).state
-    return s === 'none' || s === 'failed'
-  })
-
-  async function downloadAll() {
-    setBusy(true)
-    setNotice(null)
-    try {
-      const res = await api.enqueue(bookId)
-      setNotice({
-        kind: 'ok',
-        text: res.added === 1 ? 'Added 1 episode to downloads.' : `Added ${res.added} episodes to downloads.`,
-      })
-    } catch (err) {
-      setNotice({ kind: 'err', text: errorMessage(err) })
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function toggleFavourite() {
     setFavBusy(true)
@@ -331,8 +267,6 @@ export function Show() {
   const selectedIndex = currentKey !== null ? Number(currentKey) : primaryIndex
   const selectedNumber = selectedIndex + 1
 
-  const actionCols = isAdmin ? 'grid-cols-5' : 'grid-cols-4'
-
   const tags = (show?.tags ?? []).slice(0, 4)
   const episodeTotal = episodes.length || show?.episodeCount || 0
   const platformId = show?.source ?? source ?? null
@@ -450,7 +384,7 @@ export function Show() {
             )}
           </div>
 
-          <div className={`grid gap-2 ${actionCols} sm:max-w-md`}>
+          <div className="grid grid-cols-4 gap-2 sm:max-w-md">
             <ActionButton
               label={social && social.likes > 0 ? `Like ${social.likes}` : 'Like'}
               pressed={social?.liked ?? false}
@@ -478,47 +412,7 @@ export function Show() {
             <ActionButton label="Share" onClick={() => void share()}>
               <ShareIcon className="h-5 w-5" />
             </ActionButton>
-            {isAdmin && (
-              <div className="relative flex flex-col items-center">
-                <button
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen((v) => !v)}
-                  className="flex min-h-11 flex-col items-center gap-2 text-xs font-medium text-white/90"
-                >
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20">
-                    <MoreVerticalIcon className="h-5 w-5" />
-                  </span>
-                  <span>More</span>
-                </button>
-                {moreOpen && (
-                  <div
-                    role="menu"
-                    className="absolute top-full right-0 z-20 mt-2 w-44 rounded-lg border border-line bg-panel-2 p-1 shadow-xl shadow-black/60"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={busy || selectable.length === 0}
-                      onClick={() => {
-                        setMoreOpen(false)
-                        void downloadAll()
-                      }}
-                      className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-line disabled:opacity-40"
-                    >
-                      {busy ? 'Queuing...' : 'Download all'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-          {notice && (
-            <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
-              {notice.text}
-            </p>
-          )}
 
           <section aria-labelledby="episodes-heading">
             <h2 id="episodes-heading" className="sr-only">
@@ -595,9 +489,7 @@ export function Show() {
                 {episodes.map((ep) => (
                   <EpisodeRow
                     key={ep.index}
-                    bookId={bookId}
                     ep={ep}
-                    display={displayOf(ep)}
                     progress={progressByEp.get(ep.index)}
                     selected={selectedIndex === ep.index}
                     onPlay={() =>
@@ -699,16 +591,12 @@ function EpisodeTile({
 }
 
 function EpisodeRow({
-  bookId,
   ep,
-  display,
   progress,
   selected,
   onPlay,
 }: {
-  bookId: string
   ep: Episode
-  display: DisplayInfo
   progress: StreamProgress | undefined
   selected: boolean
   onPlay: () => void
@@ -717,10 +605,6 @@ function EpisodeRow({
   const name = isGenericEpisodeName(ep.name) ? `Episode ${number}` : ep.name
   const percent = progressPercent(progress)
   const partial = !!progress && !progress.completed && percent > 0
-  const localHref =
-    display.state === 'downloaded' && display.id !== undefined
-      ? `/watch/${encodeURIComponent(bookId)}/${encodeURIComponent(String(display.id))}`
-      : null
 
   return (
     <li className="flex items-center gap-3 px-2">
@@ -752,23 +636,7 @@ function EpisodeRow({
             Watched
           </span>
         )}
-        {display.state !== 'none' && display.state !== 'downloaded' && (
-          <StatusPill status={display.state} bytesDone={display.bytesDone} bytesTotal={display.bytesTotal} />
-        )}
       </button>
-      {display.state === 'downloaded' &&
-        (localHref ? (
-          <Link
-            to={localHref}
-            className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-emerald-300 hover:bg-emerald-500/25"
-          >
-            Downloaded
-          </Link>
-        ) : (
-          <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-emerald-300">
-            Downloaded
-          </span>
-        ))}
     </li>
   )
 }

@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, useEvents, type AppNotification } from '../api'
-import { useDownloads } from '../downloads'
 import { errorMessage, fmtAgo } from '../lib/format'
-import { useStatus } from '../status'
 import { BellIcon } from './icons'
 
 const REFRESH_MS = 60_000
@@ -19,8 +17,6 @@ function linkFor(n: AppNotification): string | null {
 }
 
 export function NotificationsBell() {
-  const isAdmin = useStatus().status?.account?.role === 'admin'
-  const { activeCount } = useDownloads()
   const [open, setOpen] = useState(false)
   const [unread, setUnread] = useState(0)
   const [items, setItems] = useState<AppNotification[] | null>(null)
@@ -164,21 +160,6 @@ export function NotificationsBell() {
           </div>
 
           <div className="overflow-y-auto p-2">
-            {isAdmin && (
-              <Link
-                to="/downloads"
-                onClick={() => setOpen(false)}
-                className={`${rowClass} mb-1 border-b border-line pb-3`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold">Downloads</span>
-                  <span className="block text-xs text-muted">
-                    {activeCount > 0 ? `${activeCount} active` : 'Nothing downloading right now'}
-                  </span>
-                </span>
-              </Link>
-            )}
-
             {error && (
               <p role="alert" className="px-3 py-2 text-xs text-red-300">
                 {error}

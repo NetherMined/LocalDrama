@@ -1,6 +1,6 @@
 # Dramora
 
-Self-hosted short-drama server. Guests can browse the catalogue. Watching, downloading and personal lists need an account. New people **request access**; an admin approves them.
+Self-hosted short-drama server. Guests can browse the catalogue. Watching and personal lists need an account. New people **request access**; an admin approves them.
 
 The server runs on your PC, a NAS or a VPS. Phones, browsers and the Android app all open the same address.
 
@@ -20,8 +20,8 @@ The server runs on your PC, a NAS or a VPS. Phones, browsers and the Android app
 - Pending sign-in is refused with a clear message. A badge in the admin menu shows how many requests are waiting.
 
 ### Admin and user
-- **Admin** can change settings, manage users, manage profiles and delete episodes.
-- **User** can browse, download and watch after approval.
+- **Admin** can change settings, manage users and manage profiles.
+- **User** can browse and watch after approval.
 
 ---
 
@@ -31,15 +31,16 @@ The server runs on your PC, a NAS or a VPS. Phones, browsers and the Android app
 2. [Step-by-step setup on Windows](#step-by-step-setup-on-windows)
 3. [Setup on macOS and Linux](#setup-on-macos-and-linux)
 4. [Setup with Docker](#setup-with-docker)
-5. [Open it from outside your home](#open-it-from-outside-your-home)
-6. [Android app](#android-app)
-7. [Using the app](#using-the-app)
-8. [Proxy: why you may need one](#proxy-why-you-may-need-one)
-9. [Configuration reference](#configuration-reference)
-10. [Updating](#updating)
-11. [Troubleshooting](#troubleshooting)
-12. [Known limitations](#known-limitations)
-13. [Development](#development)
+5. [cPanel (Setup Node.js App)](#cpanel-setup-nodejs-app)
+6. [Open it from outside your home](#open-it-from-outside-your-home)
+7. [Android app](#android-app)
+8. [Using the app](#using-the-app)
+9. [Proxy: why you may need one](#proxy-why-you-may-need-one)
+10. [Configuration reference](#configuration-reference)
+11. [Updating](#updating)
+12. [Troubleshooting](#troubleshooting)
+13. [Known limitations](#known-limitations)
+14. [Development](#development)
 
 ---
 
@@ -119,9 +120,9 @@ Mock mode uses recorded sample data and a short test video instead of the real c
 npm run start:mock
 ```
 
-Open **http://localhost:8096**, complete the wizard (any download folder works), download an episode or two and play it. Then stop the server with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+Open **http://localhost:8096**, complete the wizard, play a show and check that the video starts. Then stop the server with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
 
-Mock mode stores its settings in the same `data` folder as the real app. Before Step 7, delete that folder so the real setup starts fresh. Also delete the test episodes in the download folder you used; they're all the same 8-second sample clip.
+Mock mode stores its settings in the same `data` folder as the real app. Before Step 7, delete that folder so the real setup starts fresh.
 
 ```powershell
 Remove-Item -Recurse -Force .\data
@@ -157,14 +158,14 @@ Open **http://localhost:8096**. The wizard runs once, on first start:
 
 | Step | What to do |
 |---|---|
-| **1. Download location** | The folder where episodes are saved, such as `C:\Users\you\Videos\Dramora` (suggested by default). Click **Check**: the app creates the folder if needed and confirms it can write there. Pick a drive with plenty of space, because a full series can have 80 or more episodes. |
-| **2. Language** | The catalogue language: English, Indonesian, Chinese, Korean, Japanese, Spanish, and others. |
-| **3. Connection** | Paste your proxy URL, or leave it empty, and click **Test connection**. It shows your outgoing IP and country, and whether the Dramabox API answers. Green **"Dramabox API reachable"** means you're ready. If the country still shows ZA, the proxy isn't working. |
-| **4. Advanced** | **Request delay**: the pause between API calls. Keep it at 2000 ms or more to avoid being blocked. **Concurrency**: how many episodes download at once. **Quality**: 720p is the best that's available without an upstream VIP account. |
-| **5. Admin password** | Optional. If you set one, every device has to log in for admin actions. Recommended if other people can reach the server. |
-| **6. Network** | Shows the addresses other devices can use, such as `http://192.168.1.111:8096`. Note one down. |
+| **1. Language** | The catalogue language: English, Indonesian, Chinese, Korean, Japanese, Spanish, and others. |
+| **2. Connection** | Paste your proxy URL, or leave it empty, and click **Test connection**. It shows your outgoing IP and country, and whether the Dramabox API answers. Green **"Dramabox API reachable"** means you're ready. If the country still shows ZA, the proxy isn't working. |
+| **3. Advanced** | **Request delay**: the pause between API calls. Keep it at 2000 ms or more to avoid being blocked. **Quality**: 720p is the best that's available without an upstream VIP account. |
+| **4. Network** | Shows the addresses other devices can use, such as `http://192.168.1.111:8096`. Note one down. |
 
 Click **Finish**, and you land on the home page.
+
+The first admin account is **Admin** with the password **12345**. The sign-in page shows these while they are still the default. The first sign-in asks you to choose a new password.
 
 ### Step 9: Allow the app through Windows Firewall
 
@@ -235,7 +236,7 @@ npm run build
 npm start
 ```
 
-Then complete the [setup wizard](#step-8-complete-the-setup-wizard) at `http://localhost:8096`. The suggested download folder is `~/dramora`.
+Then complete the [setup wizard](#step-8-complete-the-setup-wizard) at `http://localhost:8096`.
 
 **3. Firewall (Linux with ufw):** `sudo ufw allow 8096/tcp`
 
@@ -294,9 +295,6 @@ cp .env.example .env
 ```
 
 ```dotenv
-# Where downloaded episodes go on this machine (default ./media)
-MEDIA_DIR=D:/Dramas
-
 # Port on this machine. Leave 8096 unless that port is already taken.
 HOST_PORT=8096
 
@@ -320,22 +318,87 @@ The `.env` file is git-ignored, so your proxy credentials stay local.
 docker compose up -d --build
 ```
 
-**5. Open it** at `http://localhost:8096` on the same machine, or at `PUBLIC_URL` from another device. Complete the wizard. Inside the container, the download folder is **`/media`**, which is already suggested. Keep it, because `/media` is mapped to your `MEDIA_DIR`.
+**5. Open it** at `http://localhost:8096` on the same machine, or at `PUBLIC_URL` from another device. Complete the wizard.
 
 | Command | What it does |
 |---|---|
 | `docker compose ps` | Shows status. `healthy` means OK. |
 | `docker compose logs -f` | Follows the logs. |
 | `docker compose up -d --build` | Rebuilds and restarts after `git pull`. |
-| `docker compose down` | Stops the container. Your data and media are kept. |
+| `docker compose down` | Stops the container. Your data is kept. |
 | `docker compose restart` | Restarts without rebuilding. |
 
 Notes:
 
-- **Where data lives:** settings and the database are in `./data`, and episodes are in `MEDIA_DIR`. Both survive `docker compose down`.
-- **Linux permissions:** the container runs as uid 1000. Make both folders writable for it: `sudo chown -R 1000:1000 data media`.
+- **Where data lives:** settings and the database are in `./data`, which survives `docker compose down`.
+- **Linux permissions:** the container runs as uid 1000. Make the data folder writable for it: `sudo chown -R 1000:1000 data`.
 - **Firewall on the host:** allow `HOST_PORT` (8096 by default). Linux: `sudo ufw allow 8096/tcp`.
-- **mDNS:** network discovery doesn't pass through Docker's bridge network. On Linux, you can use `network_mode: host` (see the comment in `docker-compose.yml`). Docker Desktop doesn't support host networking. Setting `PUBLIC_URL` is the reliable way for other devices to find the server.
+- **Other devices:** setting `PUBLIC_URL` is the reliable way for them to find the server. On Linux, `network_mode: host` (see the comment in `docker-compose.yml`) also works; Docker Desktop doesn't support host networking.
+
+---
+
+## cPanel (Setup Node.js App)
+
+Use this if your web host runs cPanel and has **Setup Node.js App** (Phusion Passenger). The app runs as a Node process on your own domain or subdomain, behind the host's Apache or LiteSpeed proxy.
+
+**Requirements**
+
+- A cPanel account with **Setup Node.js App**, offering **Node.js 22**.
+- A domain or subdomain for the app, served over HTTPS.
+- Node.js 22 or newer and npm on your PC, to build the package.
+- Outbound downloads from npm. `better-sqlite3` installs a prebuilt binary for linux x64. If the host blocks that download, the install falls back to a compile, which needs a build toolchain. Ask the host to allow it.
+
+**1. Build the package on your PC**
+
+From the `LocalDrama` folder:
+
+```sh
+npm install
+npm run package:cpanel
+```
+
+This builds the web app and writes `dist-cpanel/`, which holds the server, the built web app, `package.json` and `app.cjs`. To write it somewhere else, add `-- --out D:/dramora-cpanel`.
+
+**2. Upload it**
+
+Upload the contents of `dist-cpanel` to `/home/<user>/dramora`, for example by zipping the folder, uploading the zip in File Manager and extracting it there. Keep it **outside `public_html`**, so the code is not served as web files.
+
+**3. Create the application**
+
+In cPanel, open **Setup Node.js App** and click **Create Application**:
+
+| Field | Value |
+|---|---|
+| Node.js version | 22 |
+| Application mode | Production |
+| Application root | `dramora` |
+| Application URL | your domain or subdomain |
+| Application startup file | `app.cjs` |
+
+Add these environment variables:
+
+| Variable | Value |
+|---|---|
+| `DATA_DIR` | `/home/<user>/dramora-data` (a folder outside `public_html` and outside `dramora`) |
+| `PUBLIC_URL` | `https://your.domain` |
+| `NODE_ENV` | `production` |
+
+Leave `PORT` alone. The host sets it.
+
+Click **Run NPM Install**, wait for it to finish, then click **Start** (or **Restart**). Open the application URL and complete the setup wizard, then sign in as **Admin** with the password **12345** and choose a new password. The [first-run notes](#step-8-complete-the-setup-wizard) above apply here too.
+
+**Updating**
+
+1. Run `npm run package:cpanel` again on your PC.
+2. Replace the files in `/home/<user>/dramora` with the new `dist-cpanel` contents. Your data is in `DATA_DIR`, so it is not touched.
+3. If `package.json` changed, click **Run NPM Install**.
+4. Click **Restart**.
+
+**Limits on shared hosting**
+
+- Passenger can stop an idle app. The check for new episodes of followed shows runs every six hours, and only while the app is running, so it can miss updates while the app sleeps.
+- Video and live update streams go through the host's Apache or LiteSpeed proxy. If playback stalls or notifications stop, check the host's limits on long connections.
+- Dramabox may block the host's IP range (HTTP 403). If so, set a proxy as described in [Proxy](#proxy-why-you-may-need-one).
 
 ---
 
@@ -422,7 +485,7 @@ The stick and the server must be able to reach that address. A browser on the sa
 - **Browse:** latest releases, with *Load more*.
 - **Search:** the box at the top shows suggestions as you type. Press Enter for full results.
 
-Guests can look through all of that. Playing, listing and downloading ask you to sign in or request access.
+Guests can look through all of that. Playing and personal lists ask you to sign in or request access.
 
 ### Accounts
 
@@ -430,37 +493,10 @@ Guests can look through all of that. Playing, listing and downloading ask you to
 - Until approval, signing in stays blocked.
 - Admins see a count of waiting requests in the menu.
 
-### Downloading
-
-1. Open a show to see its episode list.
-2. Click **Download all**, or tick individual episodes and click **Download selected**.
-3. Follow progress on the **Downloads** page.
-
-On the **Downloads** page you can:
-
-- pause and resume individual episodes, or all of them,
-- retry failed episodes,
-- remove items from the queue,
-- **Clear completed**, which only tidies the list; your library keeps the episodes.
-
-Failed downloads retry automatically, up to 4 attempts in total. Interrupted downloads resume where they stopped.
-
-Files are saved as:
-
-```
-<download folder>/
-└── Show Name/
-    ├── Show Name - E01 - Episode 1.mp4
-    ├── Show Name - E02 - Episode 2.mp4
-    ├── show.json      (show details, used for library scans)
-    └── poster.jpg
-```
-
 ### Watching
 
-- **Library** lists everything you've downloaded.
-- Pick an episode to play it. Playback resumes where you left off, and an **Up next** countdown appears near the end of each episode.
-- Admins can delete episodes, which also deletes the file, and run **Scan library** to pick up files that were added or removed outside the app.
+- Open a show and pick an episode to play it. Playback resumes where you left off, and an **Up next** countdown appears near the end of each episode.
+- **Continue watching** (the clock icon in the header) lists the shows you started.
 
 ### Profiles
 
@@ -468,19 +504,19 @@ The app starts with one admin profile called **Me**. You won't see a profile pic
 
 - **Add profiles** (admins only): avatar menu → **Switch profile** → **Manage profiles**. Each person gets their own Continue Watching row and progress.
 - **PINs:** a profile can have a 4 to 6 digit PIN. Wrong PINs are limited to 5 attempts per minute.
-- **Users** can browse, download and watch. Only admins can change settings, manage profiles and delete episodes.
+- **Users** can browse and watch. Only admins can change settings and manage profiles.
 
 ### Settings (admins)
 
-Storage, language, proxy (with **Test connection**), download options, admin password, network discovery, system health and library scan.
+Sources, language, playback (request delay and quality), security (admin password), network, profiles and system health.
 
 ---
 
 ## Proxy: why you may need one
 
-Dramabox blocks API requests from some regions. From **South Africa**, for example, every API call fails with `HTTP 403 Access Denied`. Cover images still load, but browsing, searching and downloading don't. The app shows a banner with the error and links to Settings.
+Dramabox blocks API requests from some regions. From **South Africa**, for example, every API call fails with `HTTP 403 Access Denied`. Cover images still load, but browsing and searching don't. The app shows a banner with the error and links to Settings.
 
-**Fix:** route the API traffic through a proxy outside the blocked region. The proxy carries the API calls and the MP4 downloads. Your LAN traffic (streaming to your devices) never goes through it. Port forwarding is unrelated: that lets people reach *your* server. The proxy lets *your server* reach Dramabox.
+**Fix:** route the API traffic through a proxy outside the blocked region. Your LAN traffic (streaming to your devices) never goes through it. Port forwarding is unrelated: that lets people reach *your* server. The proxy lets *your server* reach Dramabox.
 
 | Format | Example |
 |---|---|
@@ -506,13 +542,12 @@ The password is masked as `***` in the web interface. It's stored in plain text 
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `8096` | Port the server listens on inside the process or container |
-| `HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` to allow only this machine. |
+| `PORT` | `8096` | Port the server listens on inside the process or container. A value that isn't a number is used as a socket path (unix socket or Windows named pipe), for hosts such as Passenger. |
+| `HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` to allow only this machine. Not used with a socket path. |
 | `HOST_PORT` | `8096` | Docker only. Port published on the host. |
 | `PUBLIC_URL` | none | Address other devices should open, such as `http://192.168.1.111:8096` |
 | `DATA_DIR` | `./data` | Folder for settings and the database. `/data` in Docker. |
-| `DEFAULT_DOWNLOAD_ROOT` | `~/Videos/Dramabox` (Windows) or `~/dramora` | Download folder suggested by the wizard (`/media` in Docker) |
-| `MEDIA_DIR` | `./media` | Docker only. Host folder mapped to `/media`. |
+| `WEB_DIST` | `web/dist` | Folder with the built web app. Only needed if it is kept somewhere else. |
 | `DRAMABOX_PROXY` | none | Proxy URL; overrides the saved setting |
 | `REQUEST_DELAY` | `2000` | Milliseconds between Dramabox API calls; overrides the saved setting |
 | `DRAMABOX_LANG` | `en` | Catalogue language; overrides the saved setting |
@@ -533,17 +568,16 @@ The password is masked as `***` in the web interface. It's stored in plain text 
 | Path | Contents |
 |---|---|
 | `data/config.json` | Settings. Includes the proxy URL in plain text and a hash of the admin password. |
-| `data/library.db` | Library, download queue, profiles, watch progress, sessions (SQLite). |
-| `<download folder>/<Show>/` | Episodes, plus `show.json` and `poster.jpg`. Unfinished downloads end in `.part`. |
+| `data/library.db` | Profiles, watch progress, favourites, accounts and sessions (SQLite). |
 
-**Back up the `data` folder.** If the database is ever lost, **Settings → Scan library** rebuilds the library from the files on disk.
+**Back up the `data` folder.** It holds everything the app stores.
 
 ### Ports and URLs
 
 | URL | Purpose |
 |---|---|
 | `http://<host>:8096/` | Web app |
-| `http://<host>:8096/api/health` | Health check (no login needed): version, uptime, disk space, queue counts |
+| `http://<host>:8096/api/health` | Health check (no login needed) |
 
 ---
 
@@ -567,7 +601,7 @@ git pull
 docker compose up -d --build
 ```
 
-Your settings, database and episodes are kept across updates. Database changes are applied automatically.
+Your settings and database are kept across updates. Database changes are applied automatically.
 
 ---
 
@@ -594,17 +628,6 @@ You are in a region that Dramabox blocks. Set a proxy in Settings → Connection
 </details>
 
 <details>
-<summary><b>Downloads fail with "permission denied" (EACCES)</b></summary>
-
-The download folder must exist and be writable **where the server runs**. Inside Docker that means a path in the container, not a Windows path from the host.
-
-- Open **Settings → Storage** and set the folder to `/media` (the container path), then save.
-- `/media` is mapped to the host folder set by `MEDIA_DIR` in `.env` (default `./media`).
-- On Linux, `sudo chown -R 1000:1000 data media`.
-- Retry the failed downloads afterwards.
-</details>
-
-<details>
 <summary><b>The phone or stick cannot open the server</b></summary>
 
 - On the same Wi-Fi, use the PC's LAN address (`http://192.168.1.111:8096`), not `localhost`.
@@ -616,7 +639,6 @@ The download folder must exist and be writable **where the server runs**. Inside
 <details>
 <summary><b>The video doesn't play</b></summary>
 
-- Wait until the episode shows as *Completed*; unfinished `.part` files don't play.
 - Try another browser. In the Android app, use **Reload** from the Back menu.
 </details>
 
@@ -638,7 +660,7 @@ npm run dev        # server with auto-reload on :8096 + Vite dev server on :5173
 npm run dev:mock   # the same, with sample data
 ```
 
-During development, open **http://localhost:5173**. Vite forwards `/api` and `/media` requests to the server.
+During development, open **http://localhost:5173**. Vite forwards `/api` and `/__mock` requests to the server.
 
 | Path | What it is |
 |---|---|
@@ -646,6 +668,7 @@ During development, open **http://localhost:5173**. Vite forwards `/api` and `/m
 | `server/fixtures/` | Recorded API responses and a test video, used by mock mode. |
 | `web/` | React 19, Vite, TypeScript, Tailwind CSS v4, React Router. |
 | `Dockerfile`, `docker-compose.yml`, `.env.example` | Container build, run, and the env template. |
+| `app.cjs`, `scripts/package-cpanel.mjs` | cPanel (Passenger) startup file, and the script that writes `dist-cpanel/`. |
 | `PLAN.md` | Design decisions, the API contract, and the phase-by-phase spec. |
 | `Dramabox-Server-Specification.md` | Original product specification. |
 

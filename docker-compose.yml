@@ -7,7 +7,6 @@ services:
       - "${HOST_PORT:-8096}:8096"
     volumes:
       - ./data:/data
-      - ${MEDIA_DIR:-./media}:/media
     environment:
       - DRAMABOX_PROXY=${DRAMABOX_PROXY:-}
       - REQUEST_DELAY=${REQUEST_DELAY:-}
@@ -17,7 +16,6 @@ services:
       # LAN example:  http://192.168.1.111:8096
       # Public example after port forwarding: http://YOUR_PUBLIC_IP:8096
       - PUBLIC_URL=${PUBLIC_URL:-}
-    # mDNS needs multicast, which Docker bridge networking does not forward.
     # On a Linux host you can use `network_mode: host` instead of `ports`
     # (remove the ports mapping; host networking uses 8096 directly).
     # Not supported on Docker Desktop.

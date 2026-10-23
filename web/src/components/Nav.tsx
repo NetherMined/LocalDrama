@@ -102,12 +102,7 @@ export function Nav() {
   const links: NavLinkItem[] = [
     { label: 'Home', to: '/', active: location.pathname === '/' },
     { label: 'Categories', to: '/browse', active: location.pathname.startsWith('/browse') },
-    ...(signedIn
-      ? [
-          { label: 'My List', to: '/favourites', active: location.pathname.startsWith('/favourites') },
-          { label: 'Downloads', to: '/downloads', active: location.pathname.startsWith('/downloads') },
-        ]
-      : []),
+    ...(signedIn ? [{ label: 'My List', to: '/favourites', active: location.pathname.startsWith('/favourites') }] : []),
   ]
   const signInHref = `/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`
 
@@ -155,9 +150,9 @@ export function Nav() {
         {signedIn && (
           <>
             <Link
-              to="/library"
-              aria-label="Watch history"
-              title="History"
+              to="/history"
+              aria-label="Continue watching"
+              title="Continue watching"
               className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10 sm:inline-flex"
             >
               <HistoryIcon className="h-5 w-5" />
@@ -262,7 +257,7 @@ export function Nav() {
         aria-label="Main"
         className="no-scrollbar hidden h-12 items-center gap-6 overflow-x-auto px-4 text-sm font-bold short:h-9 short:text-xs sm:flex sm:px-6 lg:px-10"
       >
-        {links.filter((item) => isAdmin || item.to !== '/downloads').map((item) => (
+        {links.map((item) => (
           <Link
             key={item.label}
             to={item.to}
@@ -278,7 +273,7 @@ export function Nav() {
     </header>
       {installOpen && <InstallDialog onClose={() => setInstallOpen(false)} />}
       {searchOpen && <SearchSheet onClose={() => setSearchOpen(false)} />}
-      <BottomTabs isAdmin={isAdmin} signedIn={signedIn} onSearch={() => setSearchOpen(true)} />
+      <BottomTabs signedIn={signedIn} onSearch={() => setSearchOpen(true)} />
     </>
   )
 }

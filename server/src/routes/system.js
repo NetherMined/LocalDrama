@@ -1,14 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import DramaboxClient from '@zhadev/dramabox';
 import { getConfig, saveConfig } from '../config.js';
 import { httpError } from '../errors.js';
 import { buildAgent, getProxyUrl, maskProxyUrl, parseProxyUrl, setProxy } from '../proxy.js';
-import { isWindowsPath } from '../paths.js';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'));
 export const VERSION = pkg.version;
@@ -46,28 +44,6 @@ export function lanUrls(port) {
   return urls;
 }
 
-export async function checkWritableDir(input) {
-  const str = typeof input === 'string' ? input.trim() : '';
-  if (!str) return { ok: false, error: 'Enter a folder path', resolved: '' };
-  if (process.platform !== 'win32' && isWindowsPath(str)) {
-    return {
-      ok: false,
-      error: 'This is a Windows path, but the server is running in Linux (for example in Docker). Use a path inside the container, such as /media.',
-      resolved: str,
-    };
-  }
-  const resolved = path.resolve(str);
-  try {
-    await fs.promises.mkdir(resolved, { recursive: true });
-    const probe = path.join(resolved, `.dramabox-write-test-${crypto.randomUUID()}`);
-    await fs.promises.writeFile(probe, 'ok');
-    await fs.promises.unlink(probe);
-    return { ok: true, resolved };
-  } catch (err) {
-    return { ok: false, error: `Cannot write to this folder: ${err.message}`, resolved };
-  }
-}
-
 function resolveIncomingProxy(input) {
   if (input === undefined) return undefined;
   const value = String(input ?? '').trim();
@@ -103,19 +79,10 @@ function parseSettings(body, { requireLanguage }) {
     if (!Number.isInteger(n) || n < 0 || n > 60000) throw httpError(400, 'requestDelay must be 0-60000 ms');
     patch.requestDelay = n;
   }
-  if (body.concurrency !== undefined) {
-    const n = Number(body.concurrency);
-    if (!Number.isInteger(n) || n < 1 || n > 4) throw httpError(400, 'concurrency must be 1-4');
-    patch.concurrency = n;
-  }
   if (body.quality !== undefined) {
     const n = Number(body.quality);
     if (!QUALITIES.has(n)) throw httpError(400, 'quality must be one of 144, 360, 540, 720, 1080');
     patch.quality = n;
-  }
-  if (body.mdns !== undefined) {
-    if (typeof body.mdns !== 'boolean') throw httpError(400, 'mdns must be true or false');
-    patch.mdns = body.mdns;
   }
   const proxy = resolveIncomingProxy(body.proxyUrl);
   if (proxy !== undefined) patch.proxyUrl = proxy;
@@ -123,7 +90,7 @@ function parseSettings(body, { requireLanguage }) {
 }
 
 function publicConfig(ctx) {
-  const { passwordHash, integrations, ...rest } = getConfig();
+  const { passwordHash, ...rest } = getConfig();
   return {
     ...rest,
     proxyUrl: maskProxyUrl(rest.proxyUrl),
@@ -217,16 +184,8 @@ export function registerSystemRoutes(app, ctx) {
   });
 
   app.get('/api/setup/defaults', async () => ({
-    suggestedRoot: process.env.DEFAULT_DOWNLOAD_ROOT || (process.platform === 'win32'
-      ? path.join(os.homedir(), 'Videos', 'Dramabox')
-      : path.join(os.homedir(), 'dramabox')),
     languages: LANGUAGES,
   }));
-
-  app.post('/api/setup/validate-path', async (req) => {
-    if (getConfig().configured) ctx.profiles.requireAdmin(req);
-    return checkWritableDir(req.body?.path);
-  });
 
   app.post('/api/setup/test-proxy', async (req) => {
     if (getConfig().configured) ctx.profiles.requireAdmin(req);
@@ -274,21 +233,16 @@ export function registerSystemRoutes(app, ctx) {
     const body = req.body ?? {};
 
     // Password-only first registration: sets the admin password (only while none is set).
-    if (body.password && !body.downloadRoot) {
+    if (body.password && body.language === undefined) {
       await ctx.accounts.bootstrap({ password: body.password });
       return { ok: true, needsSetup: true };
     }
 
-    const check = await checkWritableDir(body.downloadRoot);
-    if (!check.ok) throw httpError(400, check.error);
-
     const patch = parseSettings(body, { requireLanguage: true });
     if (body.password) await ctx.accounts.bootstrap({ password: body.password });
-    saveConfig({ ...patch, downloadRoot: check.resolved, configured: true });
+    saveConfig({ ...patch, configured: true });
     await applyProxy();
     ctx.provider.setOptions(providerOptions());
-    ctx.downloads.kick();
-    ctx.mdns.sync();
     return { ok: true };
   });
 
@@ -301,11 +255,6 @@ export function registerSystemRoutes(app, ctx) {
     ctx.profiles.requireAdmin(req);
     const body = req.body ?? {};
     const patch = parseSettings(body, { requireLanguage: false });
-    if (body.downloadRoot !== undefined) {
-      const check = await checkWritableDir(body.downloadRoot);
-      if (!check.ok) throw httpError(400, check.error);
-      patch.downloadRoot = check.resolved;
-    }
     if (body.password !== undefined) {
       if (typeof body.password !== 'string' || body.password === '') {
         throw httpError(400, 'Password must be 8-200 characters. Accounts always require sign-in.');
@@ -315,8 +264,6 @@ export function registerSystemRoutes(app, ctx) {
     saveConfig(patch);
     await applyProxy();
     ctx.provider.setOptions(providerOptions());
-    ctx.downloads.kick();
-    ctx.mdns.sync();
     return publicConfig(ctx);
   });
 }

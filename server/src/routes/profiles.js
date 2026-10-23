@@ -14,13 +14,13 @@ export function registerProfileRoutes(app, ctx) {
 
   app.post('/api/profiles/signout', async (req, reply) => {
     profiles.signout(req);
-    reply.header('Set-Cookie', clearProfileCookie());
+    reply.header('Set-Cookie', clearProfileCookie(req.protocol === 'https'));
     return { ok: true };
   });
 
   app.post('/api/profiles/:id/select', async (req, reply) => {
     const { profile, token } = await profiles.select(parseId(req.params.id), req.body?.pin, req.account);
-    reply.header('Set-Cookie', profileCookie(token));
+    reply.header('Set-Cookie', profileCookie(token, req.protocol === 'https'));
     return { profile };
   });
 

@@ -24,10 +24,6 @@ export function safeNext(raw: string | null): string {
   return raw
 }
 
-export function fmtGB(bytes: number): string {
-  return `${(bytes / 1073741824).toFixed(1)} GB`
-}
-
 export function fmtUptime(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds))
   const days = Math.floor(total / 86400)

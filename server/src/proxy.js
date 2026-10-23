@@ -21,7 +21,7 @@ export function installHttpsPatch() {
   // no-op
 }
 
-// Still imported by library.js (poster fetch) and routes/system.js (test-proxy); nothing is proxied any more.
+// Still imported by routes/system.js (test-proxy); nothing is proxied any more.
 export async function buildAgent() {
   return undefined;
 }

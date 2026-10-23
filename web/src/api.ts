@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { parseUserAgent } from './lib/userAgent'
 
-export type DownloadStatus = 'queued' | 'downloading' | 'paused' | 'completed' | 'failed'
-
 export interface UpstreamStatus {
   ok: boolean
   error?: string
@@ -105,22 +103,13 @@ export interface ProgressInfo {
   completed: boolean
 }
 
-export interface ContinueItem {
-  show: Show
-  episode: LibraryEpisode
-  position: number
-  duration: number
-}
-
 export interface Health {
   ok: boolean
   version: string
   uptime: number
   configured: boolean
   db: 'ok' | 'error'
-  queue: { queued: number; downloading: number; paused: number; failed: number }
   upstream: { ok: boolean }
-  disk: { freeBytes: number; totalBytes: number } | null
 }
 
 export interface Language {
@@ -129,14 +118,7 @@ export interface Language {
 }
 
 export interface SetupDefaults {
-  suggestedRoot: string
   languages: Language[]
-}
-
-export interface PathValidation {
-  ok: boolean
-  error?: string
-  resolved: string
 }
 
 export interface ProxyTest {
@@ -153,15 +135,12 @@ export interface SettingsSource {
 }
 
 export interface Config {
-  downloadRoot: string
   language: string
   proxyUrl: string
   requestDelay: number
-  concurrency: number
   quality: number
   configured: boolean
   hasPassword: boolean
-  mdns: boolean
   sources: SettingsSource[]
 }
 
@@ -170,11 +149,9 @@ export type SettingsPatch = Partial<Omit<Config, 'configured' | 'hasPassword' | 
 }
 
 export interface SetupInput {
-  downloadRoot: string
   language: string
   proxyUrl?: string
   requestDelay?: number
-  concurrency?: number
   quality?: number
   password?: string
 }
@@ -255,8 +232,6 @@ export interface Episode {
   index: number
   chapterId: string
   name: string
-  downloaded: boolean
-  downloadStatus?: DownloadStatus
 }
 
 export interface Page<T> {
@@ -306,47 +281,6 @@ export interface ShowDetail {
   source?: string | null
 }
 
-export interface DownloadItem {
-  id: number | string
-  bookId: string
-  showName: string
-  episodeIndex: number
-  episodeName: string
-  status: DownloadStatus
-  bytesDone: number
-  bytesTotal: number
-  error?: string
-  filePath?: string
-  attempts: number
-  nextAttemptAt?: number | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface LibraryShow extends Show {
-  downloaded: number
-}
-
-export interface LibraryEpisode {
-  id: number | string
-  episodeIndex: number
-  name: string
-  filePath: string
-  size: number
-  mediaUrl: string
-  progress: ProgressInfo | null
-}
-
-export interface LibraryShowDetail {
-  show: Show | null
-  episodes: LibraryEpisode[]
-}
-
-export interface LibraryScanResult {
-  added: number
-  removed: number
-}
-
 export interface AdminAccount {
   id: number
   username: string
@@ -389,7 +323,7 @@ export interface ActivityCurrent {
   position: number
   duration: number
   percent: number
-  kind: 'stream' | 'download'
+  kind: 'stream'
   updatedAt: string
 }
 
@@ -426,11 +360,7 @@ export interface CreatedUser {
   tempPassword: string
 }
 
-export type AppEvent =
-  | { type: 'open' }
-  | { type: 'download'; item: DownloadItem }
-  | { type: 'library'; bookId: string }
-  | { type: 'notification' }
+export type AppEvent = { type: 'open' } | { type: 'notification' }
 
 let guestMode = false
 
@@ -494,10 +424,6 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
   return data as T
 }
 
-function progressPath(downloadId: number | string) {
-  return `/api/progress/${enc(String(downloadId))}`
-}
-
 function watchPath(bookId: string, index: number) {
   return `/api/watch/${enc(bookId)}/${index}`
 }
@@ -550,8 +476,6 @@ export const api = {
 
   status: () => request<AppStatus>('/api/status'),
   setupDefaults: () => request<SetupDefaults>('/api/setup/defaults'),
-  validatePath: (path: string) =>
-    request<PathValidation>('/api/setup/validate-path', { method: 'POST', body: { path } }),
   testProxy: (proxyUrl: string) =>
     request<ProxyTest>('/api/setup/test-proxy', { method: 'POST', body: { proxyUrl } }),
   completeSetup: (input: SetupInput) =>
@@ -612,30 +536,6 @@ export const api = {
   removeFavourite: (bookId: string) => request<{ ok: true }>(`/api/favourites/${enc(bookId)}`, { method: 'DELETE' }),
   isFavourite: (bookId: string) => request<{ favourite: boolean }>(`/api/favourites/${enc(bookId)}`),
 
-  downloads: () => request<{ items: DownloadItem[] }>('/api/downloads'),
-  enqueue: (bookId: string, episodes?: number[]) =>
-    request<{ added: number }>('/api/downloads', {
-      method: 'POST',
-      body: episodes ? { bookId, episodes } : { bookId },
-    }),
-  removeDownload: (id: number | string) =>
-    request<{ ok: true }>(`/api/downloads/${enc(String(id))}`, { method: 'DELETE' }),
-  retryDownload: (id: number | string) =>
-    request<{ ok: true }>(`/api/downloads/${enc(String(id))}/retry`, { method: 'POST' }),
-  pauseDownload: (id: number | string) =>
-    request<{ ok: true }>(`/api/downloads/${enc(String(id))}/pause`, { method: 'POST' }),
-  resumeDownload: (id: number | string) =>
-    request<{ ok: true }>(`/api/downloads/${enc(String(id))}/resume`, { method: 'POST' }),
-  pauseAll: () => request<{ ok: true }>('/api/downloads/pause-all', { method: 'POST' }),
-  resumeAll: () => request<{ ok: true }>('/api/downloads/resume-all', { method: 'POST' }),
-  clearCompleted: () => request<{ ok: true }>('/api/downloads/clear-completed', { method: 'POST' }),
-
-  library: () => request<{ shows: LibraryShow[] }>('/api/library'),
-  libraryShow: (bookId: string) => request<LibraryShowDetail>(`/api/library/${enc(bookId)}`),
-  scanLibrary: () => request<LibraryScanResult>('/api/library/scan', { method: 'POST' }),
-  deleteLibraryEpisode: (id: number | string) =>
-    request<{ ok: true }>(`/api/library/episodes/${enc(String(id))}`, { method: 'DELETE' }),
-
   profiles: () => request<{ items: Profile[] }>('/api/profiles'),
   selectProfile: (id: number, pin?: string) =>
     request<{ profile: Profile }>(`/api/profiles/${enc(String(id))}/select`, {
@@ -650,14 +550,6 @@ export const api = {
   deleteProfile: (id: number) =>
     request<{ ok: true }>(`/api/profiles/${enc(String(id))}`, { method: 'DELETE' }),
 
-  saveProgress: (downloadId: number | string, position: number, duration: number) =>
-    request<ProgressInfo>(progressPath(downloadId), { method: 'PUT', body: { position, duration } }),
-  saveProgressBeacon: (downloadId: number | string, position: number, duration: number): boolean => {
-    if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return false
-    const blob = new Blob([JSON.stringify({ position, duration })], { type: 'application/json' })
-    return navigator.sendBeacon(`${progressPath(downloadId)}?method=PUT`, blob)
-  },
-  continueWatching: () => request<{ items: ContinueItem[] }>('/api/progress/continue'),
   watchProgress: (bookId: string) => request<{ items: StreamProgress[] }>(`/api/watch/${enc(bookId)}`),
   watchContinue: () => request<{ items: StreamContinueItem[] }>('/api/watch/continue'),
   saveWatch: (bookId: string, index: number, position: number, duration: number, source?: string) =>
@@ -697,14 +589,6 @@ type Listener = (event: AppEvent) => void
 const listeners = new Set<Listener>()
 let source: EventSource | null = null
 
-function parse<T>(raw: string): T | null {
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return null
-  }
-}
-
 function emit(event: AppEvent) {
   listeners.forEach((listener) => listener(event))
 }
@@ -713,14 +597,6 @@ function openSource() {
   if (source) return
   const es = new EventSource('/api/events')
   es.addEventListener('open', () => emit({ type: 'open' }))
-  es.addEventListener('download', (e) => {
-    const item = parse<DownloadItem>((e as MessageEvent<string>).data)
-    if (item) emit({ type: 'download', item })
-  })
-  es.addEventListener('library', (e) => {
-    const data = parse<{ bookId: string }>((e as MessageEvent<string>).data)
-    if (data) emit({ type: 'library', bookId: data.bookId })
-  })
   es.addEventListener('notification', () => emit({ type: 'notification' }))
   source = es
 }

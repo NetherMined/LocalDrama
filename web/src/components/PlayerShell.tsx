@@ -13,7 +13,7 @@ export interface PlayerSample {
 
 export interface PlayerEpisode {
   key: string
-  /** Zero-based episode index, as used by the stream API and the library. */
+  /** Zero-based episode index, as used by the stream API. */
   index: number
   /** Empty when the episode has no real name; only the label is shown then. */
   title: string
@@ -43,8 +43,6 @@ export interface PlayerShellProps {
   onClose?: () => void
   showTitle: string
   poster?: string
-  /** Keep the player on screen before anything is loaded (downloads page). */
-  alwaysVisible?: boolean
   /** Portrait 9:16 frame capped at 70vh and centred, for vertical drama posters. */
   portrait?: boolean
   /** Context for playback diagnostics sent to the server log. */
@@ -155,7 +153,6 @@ export function PlayerShell({
   onClose,
   showTitle,
   poster,
-  alwaysVisible = false,
   portrait = false,
   telemetry,
 }: PlayerShellProps) {
@@ -719,7 +716,7 @@ export function PlayerShell({
     <div
       ref={rootRef}
       tabIndex={-1}
-      hidden={activeKey === null && !alwaysVisible}
+      hidden={activeKey === null}
       onPointerMove={revealChrome}
       onPointerDown={revealChrome}
       onKeyDown={onKeyDown}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type Health } from '../api'
-import { errorMessage, fmtGB, fmtUptime } from '../lib/format'
+import { errorMessage, fmtUptime } from '../lib/format'
 import { RefreshIcon } from './icons'
 import { Section, Spinner, buttonClass } from './ui'
 
@@ -26,7 +26,7 @@ export function SystemHealth() {
   }, [load])
 
   return (
-    <Section id="system" title="System" description="Server health and disk space.">
+    <Section id="system" title="System" description="Server health and upstream status.">
       <div className="mb-4 flex justify-end">
         <button
           type="button"
@@ -52,23 +52,11 @@ export function SystemHealth() {
         <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <Stat label="Version" value={health.version} />
           <Stat label="Uptime" value={fmtUptime(health.uptime)} />
-          <Stat
-            label="Disk"
-            value={
-              health.disk
-                ? `${fmtGB(health.disk.freeBytes)} free of ${fmtGB(health.disk.totalBytes)}`
-                : 'Unavailable'
-            }
-          />
           <Stat label="Database" value={health.db === 'ok' ? 'OK' : 'Error'} tone={health.db === 'ok' ? 'ok' : 'bad'} />
           <Stat
             label="Upstream"
             value={health.upstream.ok ? 'Reachable' : 'Unreachable'}
             tone={health.upstream.ok ? 'ok' : 'bad'}
-          />
-          <Stat
-            label="Queue"
-            value={`${health.queue.queued} queued · ${health.queue.downloading} downloading · ${health.queue.paused} paused · ${health.queue.failed} failed`}
           />
         </dl>
       )}

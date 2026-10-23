@@ -16,26 +16,6 @@ CREATE TABLE IF NOT EXISTS shows (
   updatedAt TEXT NOT NULL,
   sourceId TEXT
 );
-CREATE TABLE IF NOT EXISTS downloads (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  bookId TEXT NOT NULL,
-  showName TEXT NOT NULL DEFAULT '',
-  episodeIndex INTEGER NOT NULL,
-  episodeName TEXT NOT NULL DEFAULT '',
-  chapterId TEXT,
-  status TEXT NOT NULL,
-  bytesDone INTEGER NOT NULL DEFAULT 0,
-  bytesTotal INTEGER NOT NULL DEFAULT 0,
-  error TEXT,
-  filePath TEXT,
-  createdAt TEXT NOT NULL,
-  updatedAt TEXT NOT NULL,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  nextAttemptAt INTEGER,
-  cleared INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(bookId, episodeIndex)
-);
-CREATE INDEX IF NOT EXISTS downloads_status ON downloads(status);
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -88,19 +68,6 @@ CREATE TABLE IF NOT EXISTS profile_sessions (
   profileId INTEGER NOT NULL,
   createdAt TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS progress (
-  profileId INTEGER NOT NULL,
-  downloadId INTEGER NOT NULL,
-  bookId TEXT NOT NULL,
-  episodeIndex INTEGER NOT NULL,
-  position REAL NOT NULL DEFAULT 0,
-  duration REAL NOT NULL DEFAULT 0,
-  completed INTEGER NOT NULL DEFAULT 0,
-  updatedAt INTEGER NOT NULL,
-  PRIMARY KEY (profileId, downloadId)
-);
-CREATE INDEX IF NOT EXISTS progress_download ON progress(downloadId);
-CREATE INDEX IF NOT EXISTS progress_profile_updated ON progress(profileId, updatedAt);
 CREATE TABLE IF NOT EXISTS watch_progress (
   profileId INTEGER NOT NULL,
   bookId TEXT NOT NULL,
@@ -156,24 +123,16 @@ const ADDED_COLUMNS = {
   profiles: {
     accountId: 'INTEGER',
   },
-  downloads: {
-    attempts: 'INTEGER NOT NULL DEFAULT 0',
-    nextAttemptAt: 'INTEGER',
-    cleared: 'INTEGER NOT NULL DEFAULT 0',
-  },
   shows: {
     sourceId: 'TEXT',
-  },
-  progress: {
-    watchedSeconds: 'REAL NOT NULL DEFAULT 0',
   },
   notifications: {
     link: 'TEXT',
   },
 };
 
-// Free/VIP tiers, points, rewards and sharing were removed. Their tables are dropped on every start.
-const REMOVED_TABLES = ['unlocks', 'points_ledger', 'daily_rewards', 'share_links', 'share_opens'];
+// Free/VIP tiers, points, rewards, sharing and downloads were removed. Their tables are dropped on every start.
+const REMOVED_TABLES = ['unlocks', 'points_ledger', 'daily_rewards', 'share_links', 'share_opens', 'downloads', 'progress'];
 
 function dropRemovedTables(raw) {
   for (const table of REMOVED_TABLES) raw.exec(`DROP TABLE IF EXISTS ${table}`);
@@ -342,6 +301,8 @@ export function openDb(dataDir, { legacyPasswordHash = '' } = {}) {
   dropGlobalProfileNameUnique(raw);
   migrateAccounts(raw, legacyPasswordHash);
   const ftsReady = setupSearchIndex(raw);
+  // Shows that came from the removed library scan (bookId local-...).
+  raw.prepare("DELETE FROM shows WHERE bookId LIKE 'local-%'").run();
 
   const upsert = raw.prepare(UPSERT_SHOW);
   const getShowStmt = raw.prepare('SELECT * FROM shows WHERE bookId = ?');

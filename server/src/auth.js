@@ -56,16 +56,20 @@ export function newDeviceId() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-export function sessionCookie(token) {
-  return `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE}`;
+export function secureFlag(secure) {
+  return secure ? '; Secure' : '';
 }
 
-export function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+export function sessionCookie(token, secure) {
+  return `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE}${secureFlag(secure)}`;
 }
 
-export function deviceCookie(deviceId) {
-  return `${DEVICE_COOKIE}=${deviceId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${DEVICE_MAX_AGE}`;
+export function clearSessionCookie(secure) {
+  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureFlag(secure)}`;
+}
+
+export function deviceCookie(deviceId, secure) {
+  return `${DEVICE_COOKIE}=${deviceId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${DEVICE_MAX_AGE}${secureFlag(secure)}`;
 }
 
 // The only account fields that may leave the server. Never includes passwordHash.

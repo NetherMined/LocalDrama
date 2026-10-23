@@ -4,7 +4,6 @@ import { InstallBanner } from './components/InstallBanner'
 import { Nav } from './components/Nav'
 import { UpstreamBanner } from './components/UpstreamBanner'
 import { ErrorPanel, Spinner, buttonClass } from './components/ui'
-import { DownloadsProvider } from './downloads'
 import { SignInPromptProvider } from './components/SignInPrompt'
 import { safeNext } from './lib/format'
 import { useStatus } from './status'
@@ -12,11 +11,9 @@ import { Account } from './pages/Account'
 import { AdminUserDetail } from './pages/AdminUserDetail'
 import { AdminUsers } from './pages/AdminUsers'
 import { Browse } from './pages/Browse'
-import { Downloads } from './pages/Downloads'
 import { Favourites } from './pages/Favourites'
+import { History } from './pages/History'
 import { Home } from './pages/Home'
-import { Library } from './pages/Library'
-import { LibraryShow } from './pages/LibraryShow'
 import { Login } from './pages/Login'
 import { ChangePassword } from './pages/ChangePassword'
 import { Profiles } from './pages/Profiles'
@@ -24,7 +21,6 @@ import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Setup } from './pages/Setup'
 import { Show } from './pages/Show'
-import { Watch } from './pages/Watch'
 
 function NotFound() {
   return (
@@ -72,6 +68,17 @@ export default function App() {
     )
   }
 
+  if (!status.configured) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+        <Routes>
+          <Route path="/setup" element={<Setup />} />
+          <Route path="*" element={<Navigate to="/setup" replace />} />
+        </Routes>
+      </main>
+    )
+  }
+
   const guestPage = status.configured && !status.authenticated && isGuestPage(location.pathname)
 
   if (status.authRequired && !status.authenticated && !guestPage) {
@@ -94,17 +101,6 @@ export default function App() {
     )
   }
 
-  if (!status.configured) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
-        <Routes>
-          <Route path="/setup" element={<Setup />} />
-          <Route path="*" element={<Navigate to="/setup" replace />} />
-        </Routes>
-      </main>
-    )
-  }
-
   if (status.profileRequired && !guestPage) {
     const next = nextPath(location.pathname, location.search)
     return (
@@ -119,7 +115,7 @@ export default function App() {
 
   return (
     <SignInPromptProvider>
-      <DownloadsProvider>
+      <>
         <Nav />
         <UpstreamBanner />
         <main
@@ -136,19 +132,9 @@ export default function App() {
             <Route path="/browse" element={<Browse />} />
             <Route path="/search" element={<Search />} />
             <Route path="/show/:bookId" element={<Show />} />
-            <Route
-              path="/downloads"
-              element={
-                <AdminOnly>
-                  <Downloads />
-                </AdminOnly>
-              }
-            />
-            <Route path="/library" element={<Library />} />
-            <Route path="/library/:bookId" element={<LibraryShow />} />
             <Route path="/favourites" element={<Favourites />} />
+            <Route path="/history" element={<History />} />
             <Route path="/account" element={<Account />} />
-            <Route path="/watch/:bookId/:downloadId" element={<Watch />} />
             <Route path="/profiles" element={<Profiles />} />
             <Route
               path="/admin/users"
@@ -177,8 +163,8 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
-        {!location.pathname.startsWith('/watch/') && <InstallBanner />}
-      </DownloadsProvider>
+        <InstallBanner />
+      </>
     </SignInPromptProvider>
   )
 }

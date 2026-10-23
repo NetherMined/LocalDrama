@@ -286,20 +286,11 @@ export function registerBrowseRoutes(app, ctx) {
     const sourceId = optionalSource(req.query.source);
     const { chapters } = await provider.chapters(bookId, { sourceId });
 
-    const rows = new Map(
-      ctx.db.raw.prepare('SELECT * FROM downloads WHERE bookId = ?').all(bookId).map((r) => [r.episodeIndex, r]),
-    );
-
-    const episodes = chapters.map((c) => {
-      const row = rows.get(c.index);
-      return {
-        index: c.index,
-        chapterId: c.chapterId,
-        name: c.name,
-        downloaded: !!row && row.status === 'completed' && !!row.filePath && fs.existsSync(row.filePath),
-        downloadStatus: row?.status,
-      };
-    });
+    const episodes = chapters.map((c) => ({
+      index: c.index,
+      chapterId: c.chapterId,
+      name: c.name,
+    }));
 
     ctx.follows?.checkBook(bookId, episodes.length);
 

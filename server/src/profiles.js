@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { hashPassword, parseCookies, verifyPassword } from './auth.js';
+import { hashPassword, parseCookies, secureFlag, verifyPassword } from './auth.js';
 import { httpError } from './errors.js';
 
 export const PROFILE_COOKIE = 'dbx_profile';
@@ -12,12 +12,12 @@ const COLOR_RE = /^#[0-9a-f]{6}$/i;
 const PIN_WINDOW_MS = 60 * 1000;
 const PIN_MAX_ATTEMPTS = 5;
 
-export function profileCookie(token) {
-  return `${PROFILE_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${PROFILE_MAX_AGE}`;
+export function profileCookie(token, secure) {
+  return `${PROFILE_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${PROFILE_MAX_AGE}${secureFlag(secure)}`;
 }
 
-export function clearProfileCookie() {
-  return `${PROFILE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+export function clearProfileCookie(secure) {
+  return `${PROFILE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureFlag(secure)}`;
 }
 
 export function toProfile(row, isAdmin) {
@@ -51,7 +51,6 @@ export function createProfiles(db) {
     insert: raw.prepare('INSERT INTO profiles (name, color, pinHash, isAdmin, createdAt, accountId) VALUES (?, ?, ?, 0, ?, ?)'),
     update: raw.prepare('UPDATE profiles SET name = ?, color = ?, pinHash = ? WHERE id = ?'),
     remove: raw.prepare('DELETE FROM profiles WHERE id = ?'),
-    removeProgress: raw.prepare('DELETE FROM progress WHERE profileId = ?'),
     removeWatchProgress: raw.prepare('DELETE FROM watch_progress WHERE profileId = ?'),
     removeWatchDaily: raw.prepare('DELETE FROM watch_daily WHERE profileId = ?'),
     removeFavourites: raw.prepare('DELETE FROM favourites WHERE profileId = ?'),
@@ -145,7 +144,6 @@ export function createProfiles(db) {
       owned(id, account);
       if (stmts.countByAccount.get(account.id).n <= 1) throw httpError(400, 'An account needs at least one profile');
       raw.transaction(() => {
-        stmts.removeProgress.run(id);
         stmts.removeWatchProgress.run(id);
         stmts.removeWatchDaily.run(id);
         stmts.removeFavourites.run(id);

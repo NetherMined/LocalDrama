@@ -8,6 +8,7 @@
     "dev": "concurrently -n server,web -c blue,magenta \"cd server && npm run dev\" \"cd web && npm run dev\"",
     "dev:mock": "cross-env DRAMABOX_MOCK=1 npm run dev",
     "build": "cd web && npm run build",
+    "package:cpanel": "node scripts/package-cpanel.mjs",
     "start": "cd server && npm start",
     "start:mock": "cross-env DRAMABOX_MOCK=1 npm start"
   },

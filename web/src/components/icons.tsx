@@ -256,23 +256,3 @@ export function HistoryIcon({ className = 'h-5 w-5' }: IconProps) {
     </svg>
   )
 }
-
-export function DownloadIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg {...common} className={className}>
-      <path d="M12 3v12" />
-      <path d="m7 10 5 5 5-5" />
-      <path d="M5 21h14" />
-    </svg>
-  )
-}
-
-export function LibraryIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg {...common} className={className}>
-      <rect x="3" y="4" width="5" height="16" rx="1" />
-      <rect x="10" y="4" width="5" height="16" rx="1" />
-      <path d="m17 5 4 1-3 14-4-1z" />
-    </svg>
-  )
-}

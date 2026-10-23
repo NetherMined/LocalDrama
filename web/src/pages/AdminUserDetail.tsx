@@ -366,7 +366,7 @@ function WatchCaption({ item }: { item: ActivityCurrent }) {
   return (
     <>
       <span className="mr-1.5 rounded bg-white/10 px-1 py-px align-middle text-[9px] font-bold tracking-wider text-white/80 uppercase">
-        {item.kind === 'stream' ? 'Streamed' : 'Downloaded'}
+        Streamed
       </span>
       {`${fmtEpisode(item.episodeIndex)} · ${item.percent}%`}
     </>

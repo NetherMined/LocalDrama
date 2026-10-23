@@ -889,3 +889,74 @@ Rebuild the container.
 
 ## Note
 If the APK swallows D-pad keys before the WebView sees them, that needs a change in the app's source (not here).
+
+# Ticket: Run on cPanel (Setup Node.js App), remove Downloads and Library (2026-10-23)
+
+Decisions (user): host is cPanel **Setup Node.js App** (Passenger, Node 22). Downloads go, and the Library goes with
+them (it only held downloaded episodes). Everything streams from the platforms.
+
+The TV ticket above is paused: its Phase 1 (cards) is done and deployed but not committed. Phase 2 (remote
+navigation) waits until this ticket is done.
+
+## Findings
+- Downloads/Library live in `server/src/downloads.js`, `library.js`, `paths.js`, `routes/downloads.js`,
+  `routes/library.js` (`/api/library*`, `/media/:id`), `routes/progress.js` and the download half of `progress.js`.
+  ffmpeg (`downloads.js`) is the only child process. The `downloads` and `progress` tables are download-only.
+- Download fields leak into browse (`downloaded`/`downloadStatus`), health (`queue`, `disk`), activity
+  (`kind: 'download'`), setup (download folder step, `/api/setup/validate-path`), settings (`downloadRoot`,
+  `concurrency`), config, accounts/profiles deletes, and SSE events `download`/`library`.
+- Web: pages Downloads, Library, LibraryShow, Watch (library player), `downloads.tsx`, StatusPill, plus edits in
+  App, Nav (the header clock icon links to `/library`), BottomTabs, NotificationsBell, Show (Download all, episode
+  pills), Home (continue watching merges downloads), Settings, Setup, SystemHealth, AdminUserDetail, api.ts.
+- cPanel blockers:
+  - mDNS (`mdns.js`, bonjour multicast) is useless on a host and should go.
+  - No `trustProxy`: behind Passenger every request comes from loopback, so the login limit (5/min) and the
+    request-access limit (3/h) would be shared by all users, and device IPs would be wrong.
+  - `PORT` is parsed with `Number()`, so a socket path from Passenger would silently become 8096.
+  - The startup file is ESM with top-level await; a small CommonJS `app.cjs` that `import()`s it is the safe
+    entry for Passenger.
+  - Cookies have no `Secure` flag. Harmless, but the host serves HTTPS, so set it when the request is HTTPS.
+  - `web/dist` is found at `server/src/../../web/dist`, so the uploaded folder must keep `server/` and `web/`
+    side by side.
+  - `DATA_DIR` defaults to `<repo>/data`. On cPanel it should sit outside the public web root.
+  - The 6-hourly follow check (`follows.js`) only runs while Passenger keeps the app alive. Acceptable; documented.
+
+## Phase 1: Remove Downloads and Library from the server
+1. Delete `downloads.js`, `library.js`, `paths.js`, `mdns.js`, `integrations.js`, `routes/downloads.js`,
+   `routes/library.js`, `routes/progress.js`, `routes/integrations.js`, `fixtures/batchDownload.json`. Remove
+   `bonjour-service` from `server/package.json`.
+2. Surgical edits (see findings) in `index.js`, `progress.js` (keep stream progress), `routes/browse.js`,
+   `routes/health.js`, `routes/system.js` (setup no longer needs a download folder; keep `quality`),
+   `routes/activity.js`, `accounts.js`, `profiles.js`, `config.js` (drop `downloadRoot`, `concurrency`,
+   `integrations`, `mdns`, strip them from stored config on load), `db.js` (drop `downloads` and `progress`
+   tables on start, delete `local-%` shows).
+3. Mock mode (`sample.mp4`, `sendRanged`) stays.
+**Verify:** `node --check` on every changed file; start against a scratch copy of the live DB: health, status,
+home, show, stream token, watch progress and setup all respond; old tables are gone.
+
+## Phase 2: Remove Downloads and Library from the web app
+1. Delete pages Downloads, Library, LibraryShow, Watch, `downloads.tsx`, `StatusPill.tsx`.
+2. Edit App, Nav, BottomTabs (4 tabs, fix grid), NotificationsBell, Show (no Download all / pills), Home
+   (continue watching = stream only), Settings (no Storage/Library/concurrency/mDNS), Setup (no download step),
+   SystemHealth (no Disk/Queue), AdminUserDetail, PlayerShell (`alwaysVisible`), icons, api.ts, vite proxy.
+3. The header clock icon goes to a new small **Continue watching** page (`/history`) that lists
+   `watchContinue()` in the show grid. Home's "View all" on that row points there too.
+**Verify:** `tsc` + `build`; Playwright: home, show, play, settings, setup on a fresh scratch data dir; no
+links to removed routes (grep `/library|/downloads|/watch/`).
+
+## Phase 3: cPanel support
+1. `index.js`: `trustProxy: 'loopback'`; `PORT` may be a number or a socket path; keep `HOST` default but document.
+   Cookies get `Secure` when `req.protocol === 'https'`.
+2. `app.cjs` at the repo root: `import('./server/src/index.js')` (Passenger startup file).
+3. `npm run package:cpanel` (`scripts/package-cpanel.mjs`): builds the web app and writes `dist-cpanel/` with
+   `app.cjs`, `package.json` (server dependencies only, `main: app.cjs`, engines node 22), `server/src`,
+   `server/fixtures/sample.mp4`, `web/dist`, `web/public` assets already in dist. `dist-cpanel/` is git-ignored.
+4. Dockerfile/compose: drop ffmpeg, `/media`, `DEFAULT_DOWNLOAD_ROOT` (Docker keeps working).
+5. README: new **cPanel** section (create Node.js app, Node 22, app root, startup file `app.cjs`, env vars
+   `DATA_DIR` outside `public_html`, `PUBLIC_URL`, upload `dist-cpanel`, Run NPM Install, restart, first-run
+   setup). Remove Downloads/Library/mDNS docs, update the env table.
+**Verify:** run the bundle locally with `node app.cjs` from `dist-cpanel` after `npm install` there; run it behind
+a tiny local reverse proxy to confirm per-client IPs for rate limiting; rebuild the Docker container.
+
+## Phase 4: Commit
+Commit the paused TV Phase 1 work separately first, then this ticket per phase. Push when the user asks.

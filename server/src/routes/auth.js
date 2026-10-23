@@ -42,14 +42,15 @@ export function registerAuthRoutes(app, ctx) {
   // Used by login. Replaces any previous session in this browser and
   // sets the device cookie when the browser has none yet.
   function signIn(req, reply, accountId) {
+    const secure = req.protocol === 'https';
     const knownDevice = readDeviceId(req);
     const deviceId = knownDevice ?? newDeviceId();
     auth.destroy(auth.tokenFromRequest(req));
     accounts.touchDevice(accountId, deviceId, req);
     accounts.recordLogin(accountId);
     const token = auth.create(accountId, deviceId);
-    const cookies = [sessionCookie(token), clearProfileCookie()];
-    if (!knownDevice) cookies.push(deviceCookie(deviceId));
+    const cookies = [sessionCookie(token, secure), clearProfileCookie(secure)];
+    if (!knownDevice) cookies.push(deviceCookie(deviceId, secure));
     reply.header('Set-Cookie', cookies);
     return { account: accounts.get(accountId) };
   }
@@ -81,9 +82,10 @@ export function registerAuthRoutes(app, ctx) {
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
+    const secure = req.protocol === 'https';
     auth.destroy(auth.tokenFromRequest(req));
     profiles.signout(req);
-    reply.header('Set-Cookie', [clearSessionCookie(), clearProfileCookie()]);
+    reply.header('Set-Cookie', [clearSessionCookie(secure), clearProfileCookie(secure)]);
     return { ok: true };
   });
 }

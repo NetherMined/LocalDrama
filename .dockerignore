@@ -3,3 +3,4 @@
 web/dist
 **/*.part
 .git
+dist-cpanel

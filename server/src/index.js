@@ -8,24 +8,18 @@ import { openDb } from './db.js';
 import { createAuth } from './auth.js';
 import { createAccounts } from './accounts.js';
 import { createMultiProvider } from './multiProvider.js';
-import { createDownloadManager } from './downloads.js';
-import { createLibrary } from './library.js';
 import { createEvents } from './events.js';
 import { createProfiles } from './profiles.js';
 import { createProgress } from './progress.js';
-import { createMdns } from './mdns.js';
 import { sendRanged } from './stream.js';
 import { createStreamTokens } from './streamTokens.js';
-import { lanUrls, registerSystemRoutes, checkWritableDir, VERSION } from './routes/system.js';
+import { lanUrls, registerSystemRoutes } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountRoutes } from './routes/account.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerBrowseRoutes } from './routes/browse.js';
 import { registerHomeRoutes } from './routes/home.js';
-import { registerDownloadRoutes } from './routes/downloads.js';
-import { registerLibraryRoutes } from './routes/library.js';
 import { registerProfileRoutes } from './routes/profiles.js';
-import { registerProgressRoutes } from './routes/progress.js';
 import { registerWatchRoutes } from './routes/watch.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerSourceRoutes } from './routes/sources.js';
@@ -34,12 +28,13 @@ import { registerHlsRoutes } from './routes/hls.js';
 import { registerClientLogRoutes } from './routes/clientLog.js';
 import { registerSocialRoutes } from './routes/social.js';
 import { createFollowChecker } from './follows.js';
+import { parseListen } from './listen.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const WEB_DIST = path.resolve(HERE, '..', '..', 'web', 'dist');
+const WEB_DIST = process.env.WEB_DIST ? path.resolve(process.env.WEB_DIST) : path.resolve(HERE, '..', '..', 'web', 'dist');
 const FIXTURES_DIR = path.resolve(HERE, '..', 'fixtures');
 const HOST = process.env.HOST || '0.0.0.0';
-const PORT = Number(process.env.PORT) || 8096;
+const LISTEN = parseListen(process.env.PORT);
 const MOCK = process.env.DRAMABOX_MOCK === '1';
 const MOCK_FLAKY = process.env.DRAMABOX_MOCK_FLAKY === '1';
 const MOCK_BYTES_PER_SEC = 24 * 1024;
@@ -69,7 +64,7 @@ await accounts.seedDefaultAdmin();
 
 const streamTokens = createStreamTokens();
 
-const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
+const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' }, trustProxy: 'loopback' });
 
 const sourceRepair = db.repairShowSources();
 app.log.info(`Show source repair: ${sourceRepair.relabelled} DramaBuzz rows set to dramabox, ${sourceRepair.filled} unlabelled DramaBox rows set to dramabox`);
@@ -81,33 +76,26 @@ if (isKeyOnly(config.sources?.find((s) => s.id === config.activeSourceId))) {
 
 const provider = createMultiProvider({
   mock: MOCK,
-  port: PORT,
+  port: LISTEN.port,
   language: config.language,
   requestDelay: config.requestDelay,
   resolveShowSource: (bookId) => db.getShow(bookId)?.source || null,
 });
 const profiles = createProfiles(db);
 const progress = createProgress({ db });
-const mdns = createMdns({ getConfig, port: PORT, version: VERSION, log: app.log });
 const follows = createFollowChecker({ db, provider, accounts, log: app.log });
-const library = createLibrary({ db, getConfig, events });
-const downloads = createDownloadManager({ db, provider, events, getConfig, library });
-downloads.init();
 
 const ctx = {
   db,
   provider,
-  downloads,
   events,
-  library,
   auth,
   accounts,
   profiles,
   progress,
   follows,
   streamTokens,
-  mdns,
-  port: PORT,
+  port: LISTEN.port,
   mock: MOCK,
 };
 
@@ -129,7 +117,7 @@ app.addContentTypeParser('text/plain', { parseAs: 'string' }, (req, body, done) 
 
 app.addHook('onRequest', async (req, reply) => {
   const url = req.url.split('?')[0];
-  const guarded = url.startsWith('/api/') || url.startsWith('/media/');
+  const guarded = url.startsWith('/api/');
   if (!guarded || PUBLIC_API.has(url) || url.startsWith('/api/auth/')) return;
   if (url.startsWith('/api/setup') && !getConfig().configured) return;
   const account = auth.accountFromRequest(req);
@@ -159,14 +147,11 @@ registerAuthRoutes(app, ctx);
 registerAccountRoutes(app, ctx);
 registerAdminRoutes(app, ctx);
 registerProfileRoutes(app, ctx);
-registerProgressRoutes(app, ctx);
 registerWatchRoutes(app, ctx);
 registerSourceRoutes(app, ctx);
 registerBrowseRoutes(app, ctx);
 registerHlsRoutes(app, ctx);
 registerHomeRoutes(app, ctx);
-registerDownloadRoutes(app, ctx);
-registerLibraryRoutes(app, ctx);
 registerFavouriteRoutes(app, ctx);
 registerSocialRoutes(app, ctx);
 registerClientLogRoutes(app);
@@ -203,32 +188,18 @@ if (hasWebDist) {
 
 app.setNotFoundHandler((req, reply) => {
   const url = req.url.split('?')[0];
-  const isAppRoute = !url.startsWith('/api/') && !url.startsWith('/media/') && !url.startsWith('/__mock/');
+  const isAppRoute = !url.startsWith('/api/') && !url.startsWith('/__mock/');
   if (hasWebDist && req.method === 'GET' && isAppRoute) return reply.sendFile('index.html');
   return reply.code(404).send({ error: 'Not found' });
 });
 
-if (getConfig().configured) {
-  if (getConfig().downloadRoot) {
-    const check = await checkWritableDir(getConfig().downloadRoot);
-    if (!check.ok) app.log.error(`Download folder is not writable: ${check.error}`);
-  }
-  try {
-    const scanned = await library.scan();
-    app.log.info(`Library scan: ${scanned.added} added, ${scanned.removed} removed`);
-  } catch (err) {
-    app.log.warn(`Library scan failed: ${err.message}`);
-  }
-}
-
-await app.listen({ host: HOST, port: PORT });
-app.log.info(`Dramora Server listening on ${HOST}:${PORT}${MOCK ? ' (mock mode)' : ''}`);
+await app.listen(LISTEN.path ? { path: LISTEN.path } : { host: HOST, port: LISTEN.port });
+const where = LISTEN.path ?? `${HOST}:${LISTEN.port}`;
+app.log.info(`Dramora Server listening on ${where}${MOCK ? ' (mock mode)' : ''}`);
 app.log.info(`Data directory: ${DATA_DIR}`);
-for (const url of lanUrls(PORT)) app.log.info(`LAN: ${url}`);
+if (LISTEN.port) for (const url of lanUrls(LISTEN.port)) app.log.info(`LAN: ${url}`);
 if (!hasWebDist) app.log.warn('web/dist not found; UI is not being served');
 
-mdns.sync();
-downloads.kick();
 follows.start();
 
 let stopping = false;
@@ -236,7 +207,6 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {
     if (stopping) return;
     stopping = true;
-    mdns.shutdown();
     await Promise.race([app.close(), new Promise((resolve) => setTimeout(resolve, 3000))]);
     process.exit(0);
   });

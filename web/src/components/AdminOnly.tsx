@@ -5,7 +5,7 @@ import { LockIcon } from './icons'
 import { buttonClass } from './ui'
 
 export function AdminOnly({
-  title = 'Downloads are managed by your admin',
+  title = 'This part of DramaUs is for admins',
   children,
 }: {
   title?: string

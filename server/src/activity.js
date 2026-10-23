@@ -28,32 +28,20 @@ export function createActivity({ db, accounts }) {
     profiles: raw.prepare('SELECT * FROM profiles WHERE accountId = ? ORDER BY id'),
     sessionLast: raw.prepare('SELECT MAX(lastSeenAt) AS at FROM sessions WHERE accountId = ?'),
     streamTotal: raw.prepare('SELECT COALESCE(SUM(watchedSeconds), 0) AS s FROM watch_progress WHERE profileId = ?'),
-    downloadTotal: raw.prepare('SELECT COALESCE(SUM(watchedSeconds), 0) AS s FROM progress WHERE profileId = ?'),
     dailySince: raw.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM watch_daily WHERE profileId = ? AND day >= ?'),
     dailyRows: raw.prepare('SELECT day, seconds FROM watch_daily WHERE profileId = ? AND day >= ?'),
     streamLast: raw.prepare('SELECT MAX(updatedAt) AS at FROM watch_progress WHERE profileId = ?'),
-    downloadLast: raw.prepare('SELECT MAX(updatedAt) AS at FROM progress WHERE profileId = ?'),
     streamCurrent: raw.prepare(`
       SELECT bookId, episodeIndex, position, duration, updatedAt FROM watch_progress
       WHERE profileId = ? AND completed = 0 AND updatedAt >= ?`),
-    downloadCurrent: raw.prepare(`
-      SELECT bookId, episodeIndex, position, duration, updatedAt FROM progress
-      WHERE profileId = ? AND completed = 0 AND updatedAt >= ?`),
     streamCompleted: raw.prepare('SELECT bookId, episodeIndex, updatedAt FROM watch_progress WHERE profileId = ? AND completed = 1'),
-    downloadCompleted: raw.prepare('SELECT bookId, episodeIndex, updatedAt FROM progress WHERE profileId = ? AND completed = 1'),
     favourites: raw.prepare('SELECT bookId FROM favourites WHERE profileId = ? ORDER BY createdAt DESC'),
-    downloadName: raw.prepare("SELECT showName FROM downloads WHERE bookId = ? AND showName <> '' LIMIT 1"),
   };
 
-  const showOf = (bookId) => {
-    const show = db.getShow(bookId);
-    if (show) return show;
-    const name = stmts.downloadName.get(bookId)?.showName;
-    return { bookId, name: name || bookId, cover: '' };
-  };
+  const showOf = (bookId) => db.getShow(bookId) || { bookId, name: bookId, cover: '' };
 
   function watchTotals(profileId, now) {
-    const total = stmts.streamTotal.get(profileId).s + stmts.downloadTotal.get(profileId).s;
+    const total = stmts.streamTotal.get(profileId).s;
     const d7 = stmts.dailySince.get(profileId, daysBack(now, 7)[0]).s;
     const d30 = stmts.dailySince.get(profileId, daysBack(now, 30)[0]).s;
     return { total: seconds(total), d7: seconds(d7), d30: seconds(d30) };
@@ -61,10 +49,7 @@ export function createActivity({ db, accounts }) {
 
   function currentRows(profileId, now) {
     const since = now - ACTIVE_WINDOW_MS;
-    return [
-      ...stmts.streamCurrent.all(profileId, since).map((r) => ({ ...r, kind: 'stream' })),
-      ...stmts.downloadCurrent.all(profileId, since).map((r) => ({ ...r, kind: 'download' })),
-    ];
+    return stmts.streamCurrent.all(profileId, since).map((r) => ({ ...r, kind: 'stream' }));
   }
 
   return {
@@ -81,7 +66,7 @@ export function createActivity({ db, accounts }) {
           totals.total += w.total;
           totals.d7 += w.d7;
           totals.d30 += w.d30;
-          lastMs = Math.max(lastMs, stmts.streamLast.get(p.id).at || 0, stmts.downloadLast.get(p.id).at || 0);
+          lastMs = Math.max(lastMs, stmts.streamLast.get(p.id).at || 0);
           currentlyWatching += currentRows(p.id, now).length;
           favourites += stmts.favourites.all(p.id).length;
         }
@@ -118,7 +103,7 @@ export function createActivity({ db, accounts }) {
           }));
 
         const byBook = new Map();
-        for (const r of [...stmts.streamCompleted.all(p.id), ...stmts.downloadCompleted.all(p.id)]) {
+        for (const r of stmts.streamCompleted.all(p.id)) {
           const entry = byBook.get(r.bookId) ?? { episodes: new Set(), lastMs: 0 };
           entry.episodes.add(r.episodeIndex);
           entry.lastMs = Math.max(entry.lastMs, r.updatedAt);

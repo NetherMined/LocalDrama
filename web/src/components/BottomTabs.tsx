@@ -1,6 +1,8 @@
 import { useEffect, useState, type MouseEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { BookmarkIcon, DownloadIcon, GridIcon, HomeIcon, LibraryIcon, SearchIcon } from './icons'
+import { BookmarkIcon, GridIcon, HomeIcon, SearchIcon } from './icons'
+
+const GRID_COLS = ['', '', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4', 'grid-cols-5']
 
 const HIDDEN_PATHS = ['/login', '/setup', '/change-password', '/profiles']
 
@@ -17,11 +19,11 @@ function useFullscreenActive(): boolean {
 const tabBase =
   'flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[11px] font-medium transition'
 
-export function BottomTabs({ isAdmin, signedIn, onSearch }: { isAdmin: boolean; signedIn: boolean; onSearch: () => void }) {
+export function BottomTabs({ signedIn, onSearch }: { signedIn: boolean; onSearch: () => void }) {
   const location = useLocation()
   const fullscreen = useFullscreenActive()
   const { pathname } = location
-  const hidden = fullscreen || pathname.startsWith('/watch/') || HIDDEN_PATHS.includes(pathname)
+  const hidden = fullscreen || HIDDEN_PATHS.includes(pathname)
   if (hidden) return null
 
   const popular = pathname === '/browse' && new URLSearchParams(location.search).get('sort') === 'popular'
@@ -36,12 +38,7 @@ export function BottomTabs({ isAdmin, signedIn, onSearch }: { isAdmin: boolean; 
     { label: 'Browse', to: '/browse', icon: <GridIcon className="h-6 w-6" />, active: pathname === '/browse' && !popular },
     { label: 'Search', to: '/search', icon: <SearchIcon className="h-6 w-6" />, active: pathname === '/search', onClick: openSearch },
     ...(signedIn
-      ? [
-          { label: 'My List', to: '/favourites', icon: <BookmarkIcon className="h-6 w-6" />, active: pathname === '/favourites' },
-          isAdmin
-            ? { label: 'Downloads', to: '/downloads', icon: <DownloadIcon className="h-6 w-6" />, active: pathname === '/downloads' }
-            : { label: 'Library', to: '/library', icon: <LibraryIcon className="h-6 w-6" />, active: pathname.startsWith('/library') },
-        ]
+      ? [{ label: 'My List', to: '/favourites', icon: <BookmarkIcon className="h-6 w-6" />, active: pathname === '/favourites' }]
       : []),
   ]
 
@@ -50,7 +47,7 @@ export function BottomTabs({ isAdmin, signedIn, onSearch }: { isAdmin: boolean; 
       aria-label="Main tabs"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden short:hidden"
     >
-      <ul className={`grid ${signedIn ? 'grid-cols-5' : 'grid-cols-3'}`}>
+      <ul className={`grid ${GRID_COLS[tabs.length]}`}>
         {tabs.map((tab) => (
           <li key={tab.label}>
             <Link

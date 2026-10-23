@@ -1,76 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ContinueItem, type HomeData, type HomeRow, type Show, type StreamContinueItem } from '../api'
+import { api, type HomeData, type HomeRow } from '../api'
+import { ContinueCard, continueEntries, type ContinueEntry } from '../components/ContinueCard'
 import { Hero } from '../components/Hero'
 import { ShowCard } from '../components/ShowCard'
 import { ShowRow, ShowRowSkeleton } from '../components/ShowRow'
 import { RefreshIcon } from '../components/icons'
 import { LoadError, buttonClass } from '../components/ui'
-import { errorMessage, fmtEpisode, fmtMinutesLeft } from '../lib/format'
+import { errorMessage } from '../lib/format'
 import { useStatus } from '../status'
 
 const SKELETON_ROWS = ['Currently Watching', 'Latest', 'Trending Now']
 const CONTINUE_ID = 'continue-watching'
 const CONTINUE_LIMIT = 20
 
-interface ContinueEntry {
-  show: Show
-  to: string
-  episodeIndex: number
-  position: number
-  duration: number
-}
-
-function downloadEntry(item: ContinueItem): ContinueEntry {
-  return {
-    show: item.show,
-    to: `/watch/${encodeURIComponent(item.show.bookId)}/${encodeURIComponent(String(item.episode.id))}`,
-    episodeIndex: item.episode.episodeIndex,
-    position: item.position,
-    duration: item.duration,
-  }
-}
-
-function streamEntry(item: StreamContinueItem): ContinueEntry {
-  const params = new URLSearchParams()
-  if (item.source) params.set('source', item.source)
-  params.set('ep', String(item.episodeIndex))
-  return {
-    show: item.show,
-    to: `/show/${encodeURIComponent(item.show.bookId)}?${params.toString()}`,
-    episodeIndex: item.episodeIndex,
-    position: item.position,
-    duration: item.duration,
-  }
-}
-
-// Streams carry updatedAt; downloads do not, so the two lists are interleaved by index. Each show appears once,
-// at its first (most recent) place in that order.
-function mergeContinue(streams: StreamContinueItem[], downloads: ContinueItem[]): ContinueEntry[] {
-  const recent = [...streams].sort((a, b) => b.updatedAt - a.updatedAt).map(streamEntry)
-  const local = downloads.map(downloadEntry)
-  const out: ContinueEntry[] = []
-  const seen = new Set<string>()
-  const length = Math.max(recent.length, local.length)
-  for (let i = 0; i < length && out.length < CONTINUE_LIMIT; i++) {
-    for (const entry of [recent[i], local[i]]) {
-      if (!entry || seen.has(entry.show.bookId)) continue
-      seen.add(entry.show.bookId)
-      out.push(entry)
-      if (out.length >= CONTINUE_LIMIT) break
-    }
-  }
-  return out
-}
-
 export function Home() {
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [continueItems, setContinueItems] = useState<ContinueEntry[]>([])
-  const [hasDownloads, setHasDownloads] = useState(false)
   const { status } = useStatus()
-  const isAdmin = status?.account?.role === 'admin'
   const signedIn = !!status?.authenticated
 
   const load = useCallback(async (refresh: boolean) => {
@@ -92,16 +41,12 @@ export function Home() {
   useEffect(() => {
     if (!signedIn) return
     let cancelled = false
-    Promise.allSettled([api.continueWatching(), api.watchContinue()]).then(([downloads, streams]) => {
-      if (cancelled) return
-      setHasDownloads(downloads.status === 'fulfilled' && downloads.value.items.length > 0)
-      setContinueItems(
-        mergeContinue(
-          streams.status === 'fulfilled' ? streams.value.items : [],
-          downloads.status === 'fulfilled' ? downloads.value.items : [],
-        ),
-      )
-    })
+    api
+      .watchContinue()
+      .then((res) => {
+        if (!cancelled) setContinueItems(continueEntries(res.items).slice(0, CONTINUE_LIMIT))
+      })
+      .catch(() => undefined)
     return () => {
       cancelled = true
     }
@@ -164,7 +109,7 @@ export function Home() {
             itemKey={(item) => item.show.bookId}
             render={(item) => <ContinueCard entry={item} />}
             action={refreshButton}
-            viewAllHref={isAdmin || hasDownloads ? '/library' : undefined}
+            viewAllHref="/history"
           />
         )}
 
@@ -218,14 +163,4 @@ function rowViewAllHref(row: HomeRow): string | undefined {
   if (row.key === 'new-popular') return '/browse?sort=popular'
   if (row.key.startsWith('genre-')) return `/browse?tag=${encodeURIComponent(row.title)}`
   return undefined
-}
-
-function ContinueCard({ entry }: { entry: ContinueEntry }) {
-  const { show, to, episodeIndex, position, duration } = entry
-  const progress = duration > 0 ? position / duration : 0
-  const caption =
-    position > 0
-      ? `${fmtEpisode(episodeIndex)} · ${fmtMinutesLeft(position, duration)}`
-      : `Up next: ${fmtEpisode(episodeIndex)}`
-  return <ShowCard show={show} to={to} progress={progress} caption={caption} />
 }
