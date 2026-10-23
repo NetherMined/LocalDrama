@@ -9,7 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 export type PromptOutcome = 'accepted' | 'dismissed' | 'unavailable'
 
-const TV_PATTERN = /SmartTV|Tizen|Web0S|webOS|GoogleTV|AndroidTV|BRAVIA|AFT|CrKey/i
+const TV_PATTERN = /SmartTV|Tizen|Web0S|webOS|Google ?TV|Android ?TV|BRAVIA|AFT|CrKey/i
 const STANDALONE_QUERY = '(display-mode: standalone)'
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null
@@ -41,14 +41,17 @@ export function detectPlatform(
   return 'desktop'
 }
 
+export function isDramoraApp(userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent): boolean {
+  return /DramoraAndroid/i.test(userAgent)
+}
+
 export function isInstalled(): boolean {
   if (typeof window === 'undefined') return false
   const standalone = window.matchMedia?.(STANDALONE_QUERY).matches ?? false
   const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
   // Only the Dramora app's own marker counts: TV browsers are built on WebView too, so `; wv)` alone
   // can't tell the app apart from a browser.
-  const androidApp = /DramoraAndroid/i.test(navigator.userAgent)
-  return standalone || iosStandalone || androidApp
+  return standalone || iosStandalone || isDramoraApp()
 }
 
 export interface InstallState {

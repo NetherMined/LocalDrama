@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dramora</string>
+    <string name="bad_url">Enter a full address starting with http:// or https://</string>
+    <string name="change_server">Change server</string>
+    <string name="connect">Connect</string>
+    <string name="page_error">Could not open that page.</string>
+    <string name="reload">Reload</string>
+    <string name="server_help">Use the address of the computer running Dramora. Same Wi-Fi, or your public address if you port-forwarded 8096.</string>
+    <string name="server_hint">http://192.168.1.111:8096</string>
+    <string name="server_label">Dramora server address</string>
+    <string name="tagline">Share. Return. Unlock.</string>
+</resources>

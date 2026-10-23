@@ -108,6 +108,8 @@ export function Hero({ shows }: { shows: Show[] }) {
                 )}
                 <Link
                   to={showPath(show)}
+                  data-spatial-initial={active ? '' : undefined}
+                  tabIndex={active ? undefined : -1}
                   onClick={(e) => {
                     if (signedIn) return
                     e.preventDefault()

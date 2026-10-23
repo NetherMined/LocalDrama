@@ -4,3 +4,7 @@ web/dist/
 *.part
 media/
 .env
+dist-cpanel/
+
+# APK signing key: keep it local
+android/*.keystore

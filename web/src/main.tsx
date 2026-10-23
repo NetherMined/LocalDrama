@@ -2,8 +2,14 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { detectPlatform, isDramoraApp } from './install'
+import { startSpatialNav } from './lib/spatialNav'
 import { StatusProvider } from './status'
 import './index.css'
+
+const platform = detectPlatform()
+if (platform === 'tv') document.documentElement.classList.add('tv')
+if (platform === 'tv' || isDramoraApp()) startSpatialNav()
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
